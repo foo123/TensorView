@@ -2,9 +2,9 @@
 
 View one-dimensional array data, typed array data and/or multi-dimensional array data as multidimensional tensors of various shapes efficiently.
 
-**v.1.0.0**
+version: **1.0.0**
 
-`TensorView` is both memory-efficient and speed-efficient since it only creates ways to view array data as multidimensional tensors **without** actually creating new arrays but only the way to retrieve entries is created. One can nevertheless explicitly store a TensorView instance as a single-dimensional or multi-dimensional array using `view.toArray()` or `view.toNDArray()` methods.
+`TensorView` is both memory-efficient and speed-efficient since it only creates ways to view array data as multidimensional tensors **without** actually creating new arrays. One can nevertheless explicitly store a TensorView instance as a single-dimensional or multi-dimensional array using `view.toArray()` or `view.toNDArray()` methods.
 
 **Example** (see `/test/demo.js`)
 
@@ -76,7 +76,7 @@ true
 const view  = TensorView(data, options);
 
 const data = view.data(); // underlying data of view
-const array = view.toArray(); // create single-dimensional array from view
+const array = view.toArray(ArrayClass=Array); // create single-dimensional array or typed array from view
 const ndarray = view.toNDArray(); // create multi-dimensional array from view having the same shape
 const string = view.toString(); // render view to string
 const dim = view.dimension(); // dimension of view, eg 1 for 1d, 2 for 2d, 3 for 3d, ..
@@ -85,19 +85,19 @@ const shapeForAxis = view.shape(axis); // shape of view along `axis` dimension
 const size = view.size(); // actual size of view along all dimensions (if slicing is active size is different than shape)
 const sizeForAxis = view.size(axis); // size of view along `axis` dimension
 const length = view.length(); // actual length of view (eg if saved as array)
-const slices = view.slicing(); // slicing applied along all dimensions
-const sliceForAxis = view.slicing(axis); // slicing applied view along `axis` dimension
+const slices = view.slicing(); // the slicing applied along all dimensions
+const sliceForAxis = view.slicing(axis); // the slicing applied along `axis` dimension
 
 const transpose = view.transpose(); // transpose view
 const reshaped = view.reshape(newShape); // re-shaped view
 const slice = view.slice([{start:a,stop:b,step:c}|null,..]); // get a sliced view (stop is included), same as view[a:b+1:c,:,..]
-const concatenated = view.concat([view2, view3, ..], axis=0); // concatenate multiple similar views along some axis `axis`
+const concatenated = view.concat([view2, view3, ..], axis=0); // concatenate multiple similar views along some `axis` axis
 
 const value = view.get(indices); // get value based on indices of same dimension as view shape
 view.set(indices, value); // set value at indices
 // NOTE: underlying data will change in all views which use this data and all views which depend on views which use this data
 
-view.forEach(function(data_i, i, data, view) {/*..*/}); // forEach methods
+view.forEach(function(data_i, i, data, view) {/*..*/}); // forEach method
 for (let [data_i, i] of view) {/*..*/} // similar as iterator protocol
 
 view.op(op, otherView=null); // apply lazy, when requested, pointwise operation op(view, otherView) or op(view)
