@@ -22,8 +22,8 @@ console.log(R.shape());
 console.log(R2.toNDArray());
 console.log(R2.toArray());
 console.log(R2.shape());
-for (let [di, i, index] of t) console.log([di, i, index, t.indices(index)]);
-for (let [di, i, index] of T) console.log([di, i, index, T.indices(index)]);
+for (let [di, i/*, index*/] of t) console.log([di, i/*, index, t.indices(index)*/]);
+for (let [di, i/*, index*/] of T) console.log([di, i/*, index, T.indices(index)*/]);
 //return;
 
 const add = (a, b) => a + b;

@@ -1,6 +1,6 @@
 /**
 *  TensorView
-*  View arbitrary array and typed array data as Multidimensional Tensors of various shapes
+*  View array data as multidimensional tensors of various shapes efficiently
 *  @VERSION 1.0.0
 *  https://github.com/foo123/TensorView
 *
@@ -219,13 +219,16 @@ function TensorView(data, o, _)
 
     if (_ && _._refs && (_._refs[0] instanceof TensorView))
     {
-        data = null;
         is_transposed = false;
         op = _._op || null;
         refs = _._refs;
         total = refs[0].length();
         shape = (op ? refs[0].size() : o.shape) || refs[0].size();
         ndim = shape.length;
+        if (refs[1])
+        {
+            data = null;
+        }
         if (op)
         {
             if (o.slice) o.slice = null;
@@ -341,7 +344,7 @@ function TensorView(data, o, _)
             {
                 index = compute_index(indices, ndim, is_transposed, shape, size, slicing);
                 for (j=0; j<ndim; ++j) ind[j] = indices[j];
-                var value = [get(index, indices), ind, index];
+                var value = [get(index, indices), ind/*, index*/];
                 while (i >= 0 && indices[i]+1 >= size[i]) --i;
                 if (0 <= i)
                 {
@@ -362,7 +365,7 @@ function TensorView(data, o, _)
             {
                 // way to compute index incrementally here ..??
                 index = compute_index(indices, ndim, is_transposed, shape, size, slicing);
-                ret = f(get(index, indices), indices2, data, index, self);
+                ret = f(get(index, indices), indices2, data/*, index*/, self);
                 if (false === ret) return; // if false returned end forEach
                 while (i >= 0 && indices[i]+1 >= size[i]) --i;
                 if (0 > i) return;
@@ -410,7 +413,7 @@ function TensorView(data, o, _)
     };
     self.reshape = function(shape) {
         return new TensorView(
-        null,
+        data,
         {
             shape: shape
         },
@@ -473,7 +476,7 @@ function TensorView(data, o, _)
             if (matchSize.length !== size.length) throw "TensorView::op:["+size.join(',')+"] and ["+other.size().join(',')+"] sizes do not match!";
         }*/
         return new TensorView(
-        null,
+        data,
         null,
         {
             _refs: other instanceof TensorView ? [self, other] : [self],
