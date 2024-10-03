@@ -1,2 +1,5 @@
 # TensorView
-View arbitrary array and typed array data as Multidimensional Tensors of various shapes
+
+View arbitrary one-dimensional array, typed array and/or multi-dimensional array data as Multidimensional Tensors of various shapes
+
+**in progress**
