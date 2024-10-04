@@ -432,15 +432,15 @@ function TensorView(data, o, _)
         );
     };
     self.get = function(indices) {
-        if (indices.length < ndim) throw "TensorView::get:indices do not match shape!";
-        var index = stack ? 0 : compute_index(indices, ndim, is_transposed, shape, stride, size, slicing);
-        if (0 > index || index >= total) throw "TensorView::get:index out of data bounds!";
+        if (indices.length < ndim) throw "TensorView::get:indices do not match shape dimension!";
+        var index = op || stack ? 0 : compute_index(indices, ndim, is_transposed, shape, stride, size, slicing);
+        if (0 > index || index >= total) throw "TensorView::get:index out of bounds!";
         return get(index, indices);
     };
     self.set = function(indices, value) {
-        if (indices.length < ndim) throw "TensorView::set:indices do not match shape!";
-        var index = stack ? 0 : compute_index(indices, ndim, is_transposed, shape, stride, size, slicing);
-        if (0 > index || index >= total) throw "TensorView::set:index out of data bounds!";
+        if (indices.length < ndim) throw "TensorView::set:indices do not match shape dimension!";
+        var index = op || stack ? 0 : compute_index(indices, ndim, is_transposed, shape, stride, size, slicing);
+        if (0 > index || index >= total) throw "TensorView::set:index out of bounds!";
         set(index, indices, value);
         return self;
     };
