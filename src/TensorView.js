@@ -29,54 +29,27 @@ function TensorView(data, o, _)
         op = null, refs = null,
         stack = null, stack_axis = -1,
         global_indices = null, nd_shape = null,
-        ndim = 0, shape = null, slicing = null, size = null,
-        length = 0, total = 0;
+        ndim = 0, shape = null, stride = null,
+        slicing = null, size = null, length = 0, total = 0;
 
-    function compute_index(indices, ndim, transposed, shape, size, slicing)
+    function compute_index(indices, ndim, transposed, shape, stride, size, slicing)
     {
         // compute single index for row/column-major ordering scheme from multidimensional indices
         var index = 0, axis, i;
-        if (transposed)
+        if (slicing)
         {
-            if (slicing)
+            for (axis=0; axis<ndim; ++axis)
             {
-                for (axis=ndim-1; axis>=0; --axis)
-                {
-                    i = /*size[axis] - 1 -*/ indices[axis];
-                    index *= shape[axis];
-                    index += slicing[axis].start + ((0 > i ? size[axis] : 0) + i) * slicing[axis].step;
-                }
+                i = indices[axis];
+                index += stride[axis] * (slicing[axis].start + ((0 > i ? size[axis] : 0) + i) * slicing[axis].step);
             }
-            else
-            {
-                for (axis=ndim-1; axis>=0; --axis)
-                {
-                    i = /*size[axis] - 1 -*/ indices[axis];
-                    index *= shape[axis];
-                    index += (0 > i ? size[axis] : 0) + i;
-                }
-            }
-            //index = total - 1 - index;
         }
         else
         {
-            if (slicing)
+            for (axis=0; axis<ndim; ++axis)
             {
-                for (axis=0; axis<ndim; ++axis)
-                {
-                    i = indices[axis];
-                    index *= shape[axis];
-                    index += slicing[axis].start + ((0 > i ? size[axis] : 0) + i) * slicing[axis].step;
-                }
-            }
-            else
-            {
-                for (axis=0; axis<ndim; ++axis)
-                {
-                    i = indices[axis];
-                    index *= shape[axis];
-                    index += (0 > i ? size[axis] : 0) + i;
-                }
+                i = indices[axis];
+                index += stride[axis] * ((0 > i ? size[axis] : 0) + i);
             }
         }
         return index;
@@ -88,14 +61,13 @@ function TensorView(data, o, _)
         var axis, i;
         if (transposed)
         {
-            //index = total - 1 - index;
             if (slicing)
             {
                 for (axis=0; axis<ndim; ++axis)
                 {
                     i = index % shape[axis];
                     index = stdMath.floor(index / shape[axis]);
-                    indices[axis] = /*size[axis] - 1 -*/ stdMath.floor((i - slicing[axis].start) / slicing[axis].step);
+                    indices[axis] = stdMath.floor((i - slicing[axis].start) / slicing[axis].step);
                 }
             }
             else
@@ -104,7 +76,7 @@ function TensorView(data, o, _)
                 {
                     i = index % shape[axis];
                     index = stdMath.floor(index / shape[axis]);
-                    indices[axis] = /*size[axis] - 1 -*/ i;
+                    indices[axis] = i;
                 }
             }
         }
@@ -207,6 +179,10 @@ function TensorView(data, o, _)
         {
             walk(data, compute_indices(index, nd_shape.length, false, nd_shape, nd_shape, null, global_indices), value);
         }
+        else if (is_value)
+        {
+            data = value;
+        }
         else
         {
             data[index] = value;
@@ -217,7 +193,16 @@ function TensorView(data, o, _)
 
     is_transposed = _ ? !!_._transposed : false;
 
-    if (_ && _._refs && (_._refs[0] instanceof TensorView))
+    if (data instanceof TensorView)
+    {
+        is_transposed = false;
+        refs = [data];
+        data = refs[0].data();
+        total = refs[0].length();
+        shape = o.shape || refs[0].size();
+        ndim = shape.length;
+    }
+    else if (_ && _._refs && (_._refs[0] instanceof TensorView))
     {
         is_transposed = false;
         op = _._op || null;
@@ -291,6 +276,18 @@ function TensorView(data, o, _)
         }
     }
 
+    stride = new Array(ndim);
+    if (is_transposed)
+    {
+        stride[0] = 1;
+        for (var i=1; i<ndim; ++i) stride[i] = stride[i-1]*shape[i-1];
+    }
+    else
+    {
+        stride[ndim-1] = 1;
+        for (var i=ndim-2; i>=0; --i) stride[i] = stride[i+1]*shape[i+1];
+    }
+
     size = new Array(ndim);
     for (var i=0; i<ndim; ++i) size[i] = slicing[i].count(shape[i]);
     length = ndim ? product(size) : 0;
@@ -304,6 +301,7 @@ function TensorView(data, o, _)
         nd_shape = null;
         data = null;
         shape = null;
+        stride = null;
         slicing = null;
         size = null;
     };
@@ -326,71 +324,73 @@ function TensorView(data, o, _)
         return length;
     };
     self.index = function(/*indices*/) {
-        return compute_index(Array.isArray(arguments[0]) ? arguments[0] : arguments, ndim, is_transposed, shape, size, slicing);
+        return compute_index(Array.isArray(arguments[0]) ? arguments[0] : arguments, ndim, is_transposed, shape, stride, size, slicing);
     };
     self.indices = function(index) {
         return compute_indices(index, ndim, is_transposed, shape, size, slicing);
     };
     self.iterator = function() {
-        var i = 0 < length ? ndim - 1 : -1, j, index,
-            indices = 0 < length ? (new Array(ndim)).fill(0) : null,
-            ind = indices ? new Array(ndim) : null;
+        var i = 0 < length ? ndim - 1 : -1,
+            indices = null, ind = null, index = 0,
+            ret = {value: null};
         return {next:function next() {
             if (0 > i)
             {
-                return {done:true};
+                indices = ind = ret = null;
+                return {done: true};
             }
             else
             {
-                index = compute_index(indices, ndim, is_transposed, shape, size, slicing);
-                for (j=0; j<ndim; ++j) ind[j] = indices[j];
-                var value = [get(index, indices), ind/*, index*/];
-                while (i >= 0 && indices[i]+1 >= size[i]) --i;
-                if (0 <= i)
+                if (!indices)
                 {
-                    ++indices[i];
-                    while (i+1 < ndim) indices[++i] = 0;
+                    indices = (new Array(ndim)).fill(0);
+                    ind = indices.slice();
+                    index = compute_index(indices, ndim, is_transposed, shape, stride, size, slicing);
+                    ret.value = [get(index, indices), ind/*, index*/];
                 }
-                return {value:value};
+                else
+                {
+                    while (i >= 0 && indices[i]+1 >= size[i])
+                    {
+                        index -= stride[i] * (slicing[i].start + indices[i] * slicing[i].step);
+                        --i;
+                    }
+                    if (0 <= i)
+                    {
+                        ++indices[i];
+                        ind[i] = indices[i];
+                        index += stride[i] * slicing[i].step;
+                        while (i+1 < ndim)
+                        {
+                            ++i;
+                            indices[i] = 0;
+                            ind[i] = 0;
+                            index += stride[i] * slicing[i].start;
+                        }
+                        ret.value = [get(index, indices), ind/*, index*/];
+                    }
+                    else
+                    {
+                        indices = ind = ret = null;
+                        return {done: true};
+                    }
+                }
+                return ret;
             }
         }};
     };
     self.forEach = function(f) {
         if (0 < length && is_function(f))
         {
-            var indices = (new Array(ndim)).fill(0),
-                indices2 = indices.slice(),
-                index = 0, i = ndim - 1, ret = null;
+            var iter = self.iterator(), next, ret = null;
             while (true)
             {
-                // way to compute index incrementally here ..??
-                index = compute_index(indices, ndim, is_transposed, shape, size, slicing);
-                ret = f(get(index, indices), indices2, data/*, index*/, self);
+                next = iter.next();
+                if (!next || next.done) return;
+                ret = f(next.value[0], next.value[1], data/*, next.value[2]*/, self);
                 if (false === ret) return; // if false returned end forEach
-                while (i >= 0 && indices[i]+1 >= size[i]) --i;
-                if (0 > i) return;
-                ++indices[i];
-                indices2[i] = indices[i];
-                while (i+1 < ndim)
-                {
-                    ++i;
-                    indices[i] = 0;
-                    indices2[i] = 0;
-                }
             }
         }
-    };
-    self.indexOf = function(x, eq) {
-        eq = eq || equ;
-        var indices = null;
-        self.forEach(function(di, i) {
-            if (eq(x, di))
-            {
-                indices = i; // found
-                return false; // stop
-            }
-        });
-        return indices;
     };
     self.slice = function(slices) {
         return new TensorView(
@@ -412,15 +412,7 @@ function TensorView(data, o, _)
         );
     };
     self.reshape = function(shape) {
-        return new TensorView(
-        data,
-        {
-            shape: shape
-        },
-        {
-            _refs: [self]
-        }
-        );
+        return new TensorView(self, {shape: shape});
     };
     self.concat = function(others, axis) {
         axis = axis || 0;
@@ -441,13 +433,13 @@ function TensorView(data, o, _)
     };
     self.get = function(indices) {
         if (indices.length < ndim) throw "TensorView::get:indices do not match shape!";
-        var index = stack ? 0 : compute_index(indices, ndim, is_transposed, shape, size, slicing);
+        var index = stack ? 0 : compute_index(indices, ndim, is_transposed, shape, stride, size, slicing);
         if (0 > index || index >= total) throw "TensorView::get:index out of data bounds!";
         return get(index, indices);
     };
     self.set = function(indices, value) {
         if (indices.length < ndim) throw "TensorView::set:indices do not match shape!";
-        var index = stack ? 0 : compute_index(indices, ndim, is_transposed, shape, size, slicing);
+        var index = stack ? 0 : compute_index(indices, ndim, is_transposed, shape, stride, size, slicing);
         if (0 > index || index >= total) throw "TensorView::set:index out of data bounds!";
         set(index, indices, value);
         return self;
@@ -488,8 +480,6 @@ function TensorView(data, o, _)
         var array = new (ArrayClass || Array)(length), index = 0;
         self.forEach(function(di/*,i*/) {
             // put in row-major order
-            /*for (var j=0,n=ndim-1,ij=0; j<n; ++j) {ij += i[j]; ij *= size[j+1];}
-            array[ij+i[n]] = di;*/
             array[index++] = di;
         });
         return array;
@@ -570,7 +560,7 @@ function TensorView(data, o, _)
             {
                 self.forEach(function(di) {
                     // print in 1d slices
-                    str += (str.length ? " " : "") + String(di)/*pad(String(di), max, ' ', false)*/;
+                    str += (str.length ? " " : "") + String(di);
                 });
             }
         }
@@ -591,7 +581,6 @@ TensorView[proto] = {
     indices: null,
     iterator: null,
     forEach: null,
-    indexOf: null,
     slice: null,
     reshape: null,
     concat: null,
@@ -683,10 +672,6 @@ function pad(s, n, z, after)
 {
     var p = s.length < n ? (new Array(n-s.length+1)).join(z) : '';
     return after ? (s + p) : (p + s);
-}
-function equ(a, b)
-{
-    return a === b;
 }
 function add(a, b)
 {
