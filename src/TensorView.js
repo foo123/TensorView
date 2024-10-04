@@ -332,11 +332,11 @@ function TensorView(data, o, _)
     self.iterator = function() {
         var i = 0 < length ? ndim - 1 : -1,
             indices = null, ind = null, index = 0,
-            ret = {value: null};
+            value = [null, null], ret = {value: null};
         return {next:function next() {
             if (0 > i)
             {
-                indices = ind = ret = null;
+                indices = ind = ret = value = null;
                 return {done: true};
             }
             else
@@ -346,7 +346,9 @@ function TensorView(data, o, _)
                     indices = (new Array(ndim)).fill(0);
                     ind = indices.slice();
                     index = compute_index(indices, ndim, is_transposed, shape, stride, size, slicing);
-                    ret.value = [get(index, indices), ind/*, index*/];
+                    value[0] = get(index, indices);
+                    value[1] = ind;
+                    ret.value = value;
                 }
                 else
                 {
@@ -367,11 +369,13 @@ function TensorView(data, o, _)
                             ind[i] = 0;
                             index += stride[i] * slicing[i].start;
                         }
-                        ret.value = [get(index, indices), ind/*, index*/];
+                        value[0] = get(index, indices);
+                        value[1] = ind;
+                        ret.value = value;
                     }
                     else
                     {
-                        indices = ind = ret = null;
+                        indices = ind = ret = value = null;
                         return {done: true};
                     }
                 }
@@ -387,7 +391,7 @@ function TensorView(data, o, _)
             {
                 next = iter.next();
                 if (!next || next.done) return;
-                ret = f(next.value[0], next.value[1], data/*, next.value[2]*/, self);
+                ret = f(next.value[0], next.value[1], data, self);
                 if (false === ret) return; // if false returned end forEach
             }
         }
