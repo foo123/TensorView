@@ -26,11 +26,10 @@ function TensorView(data, o, _)
 
     var self = this,
         is_transposed = false, is_value = false,
-        op = null, refs = null,
-        stack = null, stack_axis = -1,
+        op = null, refs = null, stack = null, stack_axis = -1,
         global_indices = null, nd_shape = null,
-        ndim = 0, shape = null, stride = null,
-        slicing = null, size = null, length = 0, total = 0;
+        ndim = 0, shape = null, stride = null, size = null,
+        slicing = null, default_slicing = true, length = 0, total = 0;
 
     function compute_index(indices, ndim, transposed, shape, stride, size, slicing)
     {
@@ -259,6 +258,18 @@ function TensorView(data, o, _)
         ndim = shape.length;
     }
 
+    stride = new Array(ndim);
+    if (is_transposed)
+    {
+        stride[0] = 1;
+        for (var i=1; i<ndim; ++i) stride[i] = stride[i-1]*shape[i-1];
+    }
+    else
+    {
+        stride[ndim-1] = 1;
+        for (var i=ndim-2; i>=0; --i) stride[i] = stride[i+1]*shape[i+1];
+    }
+
     slicing = o.slice;
     if (!slicing || !slicing.length)
     {
@@ -272,20 +283,9 @@ function TensorView(data, o, _)
         for (var i=0; i<ndim; ++i)
         {
             var s = slicing[i] || {start:0, stop:shape[i]-1, step:1};
-            slicing[i] = Slice._indices(shape[i], s.start, s.stop, s.step);
+            slicing[i] = s = Slice._indices(shape[i], s.start, s.stop, s.step);
+            if (s.start !== 0 || s.stop+1 !== shape[i] || s.step !== 1) default_slicing = false;
         }
-    }
-
-    stride = new Array(ndim);
-    if (is_transposed)
-    {
-        stride[0] = 1;
-        for (var i=1; i<ndim; ++i) stride[i] = stride[i-1]*shape[i-1];
-    }
-    else
-    {
-        stride[ndim-1] = 1;
-        for (var i=ndim-2; i>=0; --i) stride[i] = stride[i+1]*shape[i+1];
     }
 
     size = new Array(ndim);
@@ -416,7 +416,7 @@ function TensorView(data, o, _)
         );
     };
     self.reshape = function(shape) {
-        return new TensorView(self, {shape: shape});
+        return default_slicing && !stack && !refs ? new TensorView(data, {ndarray: nd_shape, shape: shape}) : new TensorView(self, {shape: shape});
     };
     self.concat = function(others, axis) {
         axis = axis || 0;
