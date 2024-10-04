@@ -27,7 +27,7 @@ function TensorView(data, o, _)
     var self = this,
         is_transposed = false, is_value = false,
         op = null, refs = null, stack = null, stack_axis = -1,
-        global_indices = null, nd_shape = null,
+        global_indices = null, nd_shape = null, same_shape = false,
         ndim = 0, shape = null, stride = null, size = null,
         slicing = null, default_slicing = true, length = 0, total = 0;
 
@@ -137,7 +137,7 @@ function TensorView(data, o, _)
         }
         else if (nd_shape)
         {
-            return walk(data, compute_indices(index, nd_shape.length, false, nd_shape, nd_shape, null, global_indices));
+            return walk(data, default_slicing && same_shape ? indices : compute_indices(index, nd_shape.length, false, nd_shape, nd_shape, null, global_indices));
         }
         else
         {
@@ -176,7 +176,7 @@ function TensorView(data, o, _)
         }
         else if (nd_shape)
         {
-            walk(data, compute_indices(index, nd_shape.length, false, nd_shape, nd_shape, null, global_indices), value);
+            walk(data, default_slicing && same_shape ? indices : compute_indices(index, nd_shape.length, false, nd_shape, nd_shape, null, global_indices), value);
         }
         else if (is_value)
         {
@@ -256,6 +256,7 @@ function TensorView(data, o, _)
         if (is_value) total = computed_total;
         if (computed_total !== total) throw "TensorView:shape ["+shape.join(',')+"] does not match size "+String(total);
         ndim = shape.length;
+        same_shape = !!nd_shape && (nd_shape.length === shape.length) && (nd_shape.length === shape.filter(function(shapei,i) {return shapei === nd_shape[i];}).length);
     }
 
     stride = new Array(ndim);
