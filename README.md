@@ -2,7 +2,7 @@
 
 View one-dimensional array data, typed array data and/or multi-dimensional array data as multidimensional tensors of various shapes efficiently.
 
-version: **1.0.0** (9 kB minified)
+version: **1.0.0** (9.5 kB minified)
 
 `TensorView` is both memory-efficient and speed-efficient since it only creates ways to view array data as multidimensional tensors **without** actually creating new arrays. One can nevertheless explicitly store a TensorView instance as a single-dimensional or multi-dimensional array using `view.toArray()` or `view.toNDArray()` methods.
 
@@ -18,7 +18,7 @@ const s = TensorView(array, {shape:[2,3]}); // create a view with shape
 const sT = s.transpose(); // get transposed view
 
 const m = TensorView(ndarray, {ndarray:[2,3],shape:[3,2]}); // create view of ndarray with different shape
-const m2 = m.reshape([2,3]).slice([null,{start:1,stop:2,step:1}]); // reshape and get a slice
+const m2 = m.reshape([2,3]).slice([null,[1,2]]); // reshape and get a slice
 
 console.log(s.toNDArray());
 console.log(s.toArray());
@@ -32,10 +32,10 @@ console.log(m2.toArray());
 console.log(m.data() === m2.data()) // uses same data
 
 // iterator protocol
-for (let [data_i, i] of s) console.log([data_i, i]); // i is multi-dimensional index in general
+for (let [data_i, i] of s) console.log([data_i, i.slice()]); // i is multi-dimensional index in general
 
 // same as
-s.forEach((data_i, i) => console.log([data_i, i])); // i is multi-dimensional index in general
+s.forEach((data_i, i) => console.log([data_i, i.slice()])); // i is multi-dimensional index in general
 ```
 
 **Output**
@@ -90,7 +90,7 @@ const sliceForAxis = view.slicing(axis); // the slicing applied along `axis` dim
 
 const transpose = view.transpose(); // transpose view
 const reshaped = view.reshape(newShape); // re-shaped view
-const slice = view.slice([{start:a,stop:b,step:c}|null,..]); // get a sliced view (stop is included), same as view[a:b+1:c,:,..]
+const slice = view.slice([[a,b,c]|null, ..]); // get a sliced view (b is included), same as view[a:b+1:c|:, ..]
 const concatenated = view.concat([view2, view3, ..], axis=0); // concatenate multiple similar views along some `axis` axis
 
 const value = view.get(indices); // get value based on indices of same dimension as view shape
@@ -103,7 +103,7 @@ for (let [data_i, i] of view) {/*..*/} // similar as iterator protocol
 view.op(op, otherView=null); // apply lazy, when requested, pointwise operation op(view, otherView) or op(view)
 
 // creating an actual copy and not share data is easy to do in various ways, eg:
-const copied = TensorView(view.toArray(), {shape:view.size()}); // any active slicing and/or operation will be applied on view output
+const copied = TensorView(view.toArray(), {shape: view.size()}); // any active slicing and/or operation will be applied on view output
 
 view.dispose(); // dispose view if no longer needed
 ```

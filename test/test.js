@@ -2,11 +2,11 @@
 
 const TensorView = require('../src/TensorView.js');
 
-const t = TensorView([1,2,3,4,5,6], {shape:[2,3]}).slice([null,{start:1,stop:2}]);
+const t = TensorView([1,2,3,4,5,6], {shape:[2,3]}).slice([null,[1,2]]);
 const T = t.transpose();
 const r = TensorView([[1,2,3],[4,5,6]], {ndarray:[2,3],shape:[3,2]});
 const R = r.transpose();
-const R2 = r.reshape([2,3]).slice([null,{start:1,stop:2}]);
+const R2 = r.reshape([2,3]).slice([null,[1,2]]);
 console.log(t.toNDArray());
 console.log(t.toArray());
 console.log(t.shape());
@@ -22,31 +22,31 @@ console.log(R.shape());
 console.log(R2.toNDArray());
 console.log(R2.toArray());
 console.log(R2.shape());
-for (let [di, i/*, index*/] of t) console.log([di, i/*, index, t.indices(index)*/]);
-for (let [di, i/*, index*/] of T) console.log([di, i/*, index, T.indices(index)*/]);
-//return;
+for (let [di, i] of t) console.log([di, i.slice()]);
+T.forEach((di, i) => console.log([di, i.slice()]))
 
 const add = (a, b) => a + b;
 const mul = (a, b) => a * b;
 const data = [1,2,3,4,5,6,7,8,9,10];
 const data1 = [1,2,3,4,5,6];
 const data2 = [7,8,9,10,11,12];
+const bigdata = [1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10];
 
 const view1 = TensorView(data, {shape:[2,5]});
 const view2 = TensorView(data, {shape:[5,2]});
 const view2C = TensorView([[1,2,3,4,5],[6,7,8,9,10]], {shape:[5,2],ndarray:[2,5]});
 const view2T = view2.transpose();
-const view3 = TensorView(data, {shape:[5,2],slice:[{start:1,stop:2},null]});
+const view3 = TensorView(data, {shape:[5,2],slice:[[1,2],null]});
 const view3T = view3.transpose();
-const view3R = TensorView(data, {shape:[5,2],slice:[{start:2,stop:1,step:-1},null]});
+const view3R = TensorView(data, {shape:[5,2],slice:[[2,1,-1],null]});
 const view3TR = view3R.transpose();
-const view4 = TensorView(data, {shape:[5,2],slice:[{start:4,stop:0,step:-2},null]});
-const view5 = view4.slice([{start:2,stop:0,step:-2},null]);
-const viewB = TensorView([1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10], {shape:[5,2,10]});
+const view4 = TensorView(data, {shape:[5,2],slice:[[4,0,-2],null]});
+const view5 = view4.slice([[2,0,-2],null]);
 const view12 = TensorView(data1, {shape:[2,3]}).concat(TensorView(data2, {shape:[2,3]}), 0);
-const view12S = view12.slice([{start:2,stop:0,step:-2},{start:0,stop:2,step:2}]);
+const view12S = view12.slice([[2,0,-2],[0,2,2]]);
 const view12T = view12S.transpose();
 const sum = view1.op(add, view1);
+const viewB = TensorView(bigdata, {shape:[5,2,10]});
 
 console.log(view1.toString());
 console.log(view1.toNDArray());
@@ -96,16 +96,14 @@ console.log(view12T.toString());
 console.log(view12T.toNDArray());
 console.log(view12T.toArray());
 console.log('---');
-/*console.log(view4.toString());
+console.log(view4.toString());
 console.log(view4.toNDArray());
 console.log(view4.toArray());
-console.log(view4.size());
 console.log('---');
 console.log(view5.toString());
 console.log(view5.toNDArray());
 console.log(view5.toArray());
-console.log(view5.size());
 console.log('---');
-console.log(viewB.toString());
+/*console.log(viewB.toString());
 console.log(viewB.toString(4));
 console.log('---');*/
