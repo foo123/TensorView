@@ -23,7 +23,7 @@ console.log(R2.toNDArray());
 console.log(R2.toArray());
 console.log(R2.shape());
 for (let [di, i] of t) console.log([di, i.slice()]);
-T.forEach((di, i) => console.log([di, i.slice()]))
+T.forEach((di, i) => console.log([di, i.slice()]));
 
 const add = (a, b) => a + b;
 const mul = (a, b) => a * b;
@@ -47,6 +47,7 @@ const view12S = view12.slice([[2,0,-2],[0,2,2]]);
 const view12T = view12S.transpose();
 const sum = view1.op(add, view1);
 const viewB = TensorView(bigdata, {shape:[5,2,10]});
+const viewBB = TensorView(bigdata, {shape:[5,2,5,2]});
 
 console.log(view1.toString());
 console.log(view1.toNDArray());
@@ -104,6 +105,11 @@ console.log(view5.toString());
 console.log(view5.toNDArray());
 console.log(view5.toArray());
 console.log('---');
-/*console.log(viewB.toString());
+console.log(viewB.toString());
+console.log('---');
 console.log(viewB.toString(4));
-console.log('---');*/
+console.log('---');
+console.log(viewBB.toString());
+console.log('---');
+console.log(viewBB.toString(4));
+console.log('---');

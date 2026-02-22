@@ -1,7 +1,7 @@
 /**
 *  TensorView
 *  View array data as multidimensional tensors of various shapes efficiently
-*  @VERSION 1.0.0
+*  @VERSION 1.1.0
 *  https://github.com/foo123/TensorView
 *
 **/
@@ -18,7 +18,9 @@ else
 }('undefined' !== typeof self ? self : this, 'TensorView', function(undef) {
 "use strict";
 
-var proto = 'prototype', stdMath = Math;
+var proto = 'prototype',
+    stdMath = Math,
+    TypedArray = "undefined" !== typeof Float32Array ? Object.getPrototypeOf(Float32Array) : null;
 
 function TensorView(data, o, _)
 {
@@ -517,75 +519,12 @@ function TensorView(data, o, _)
         return ndarray;
     };
     self.toString = function(maxsize) {
-        var str = '', max = -Infinity, rows = null,
-            rem = '', maxsize2, oversize, inlimits;
-        if (null != maxsize)
-        {
-            maxsize2 = maxsize >>> 1;
-            if (2 <= ndim)
-            {
-                oversize = size.map(function(size) {return maxsize < size;});
-                inlimits = function(i, j) {
-                    return !oversize[j] || (j <= ndim-3 && (i < maxsize2 || i > size[j]-1-maxsize2)) || (j > ndim-3 && (i <= maxsize2 || i >= size[j]-1-maxsize2));
-                };
-                rows = (new Array(oversize[size.length-2] ? maxsize+1 : size[size.length-2])).fill(null).map(function(_) {return new Array(oversize[size.length-1] ? maxsize+1 : size[size.length-1]);});
-                self.forEach(function(di, i) {if (i.length === i.filter(inlimits).length) max = stdMath.max(String(di).length, max);});
-                self.forEach(function(di, i) {
-                    // print in 2d slices
-                    if (i.length === i.filter(inlimits).length)
-                    {
-                        var i1 = i[ndim-2], i2 = i[ndim-1];
-                        if (oversize[ndim-2] && i1 > maxsize2) i1 = maxsize - (size[ndim-2]-1-i1);
-                        if (oversize[ndim-1] && i2 > maxsize2) i2 = maxsize - (size[ndim-1]-1-i2);
-                        rows[i1][i2] = pad(String(di), max, ' ', false);
-                        if (size[ndim-1] === 1+i[ndim-1] && size[ndim-2] === 1+i[ndim-2])
-                        {
-                            str += rem + rows.map(function(row, j) {
-                                if (oversize[ndim-2] && maxsize2 === j) row = new Array(row.length).fill(pad(':', max, ' ', false));
-                                if (oversize[ndim-1]) row[maxsize2] = pad('..', max, ' ', false);
-                                return row.join(' ');
-                            }).join("\n");
-                            var j = ndim-3, o = -1;
-                            while (0 <= j ) {o = (-1 === o) && oversize[j] && (i[j]+1 === maxsize2) ? j : o; --j;}
-                            rem = -1 === o ? "\n-\n" : "\n-\n"+pad(':', max, ' ', false)+' '+(new Array((oversize[ndim-1] ? maxsize+1 : size[ndim-1])-2)).fill(pad('..', max, ' ', false)).join(' ')+' '+pad(':', max, ' ', false)+"\n-\n";
-                        }
-                    }
-                });
-            }
-            else
-            {
-                // print in 1d slices
-                str = maxsize >= size[0] ? self.toString() : (self.slice([{start:0,stop:maxsize2+1}]).toString() + ' .. ' + self.slice([{start:size[0]-1-maxsize2,stop:size[0]-1}]).toString());
-            }
-        }
-        else
-        {
-            if (2 <= ndim)
-            {
-                rows = (new Array(size[size.length-2])).fill(null).map(function(_) {return new Array(size[size.length-1]);});
-                self.forEach(function(di) {max = stdMath.max(String(di).length, max);});
-                self.forEach(function(di, i) {
-                    // print in 2d slices
-                    rows[i[ndim-2]][i[ndim-1]] = pad(String(di), max, ' ', false);
-                    if (size[ndim-1] === 1+i[ndim-1] && size[ndim-2] === 1+i[ndim-2])
-                    {
-                        str += rem + rows.map(function(row) {return row.join(' ');}).join("\n");
-                        rem = "\n-\n";
-                    }
-                });
-            }
-            else
-            {
-                self.forEach(function(di) {
-                    // print in 1d slices
-                    str += (str.length ? " " : "") + String(di);
-                });
-            }
-        }
-        return str;
+        if (null == maxsize) maxsize = Infinity;
+        var ndarray = self.toNDArray();
+        return 2 < ndim ? str_nd(ndarray, maxsize) : (2 === ndim ? str_2d(ndarray, maxsize) : str_1d(ndarray, maxsize));
     };
 }
-TensorView.VERSION = '1.0.0';
+TensorView.VERSION = '1.1.0';
 TensorView[proto] = {
     constructor: TensorView,
     dispose: null,
@@ -679,8 +618,18 @@ function is_function(x)
 function is_array(x)
 {
     if (Array.isArray(x)) return true;
-    else if (("undefined" !== typeof Float32Array) && (x instanceof Object.getPrototypeOf(Float32Array))) return true;
-    return false;
+    return TypedArray ? (x instanceof TypedArray) : false;
+}
+function array(n, v)
+{
+    n = stdMath.max(0, stdMath.round(n));
+    var i, arr = new Array(n);
+    for (i=0; i<n; ++i) arr[i] = is_function(v) ? v(i, arr) : v;
+    return arr;
+}
+function size(x)
+{
+    return is_array(x) ? ([x.length]).concat(size(x[0])) : [];
 }
 function pad(s, n, z, after)
 {
@@ -702,6 +651,81 @@ function sum(array)
 function product(array)
 {
     return array.reduce(mul, 1);
+}
+function str_1d(x, MAXPRINTSIZE)
+{
+    if (x.length > MAXPRINTSIZE)
+    {
+        x = x.slice(0, stdMath.round(MAXPRINTSIZE/2)).concat(['..']).concat(x.slice(-stdMath.round(MAXPRINTSIZE/2)+1));
+    }
+    return '[' + x.map(function(xi) {return String(xi);}).join('  ') + ']';
+}
+function str_2d(x, MAXPRINTSIZE)
+{
+    var use_ddots = false;
+    if (x[0].length > MAXPRINTSIZE)
+    {
+        x = x.map(function(row) {
+            return row.slice(0, stdMath.round(MAXPRINTSIZE/2)).concat('..').concat(row.slice(-stdMath.round(MAXPRINTSIZE/2)+1));
+        });
+        use_ddots = true;
+    }
+    if (x.length > MAXPRINTSIZE)
+    {
+        x = x.slice(0, stdMath.round(MAXPRINTSIZE/2)).concat([array(x[0].length, function(i) {return stdMath.round(MAXPRINTSIZE/2) === i ? (use_ddots ? ':.' : ':') : ':';})]).concat(x.slice(-stdMath.round(MAXPRINTSIZE/2)+1));
+    }
+    var ln = array(x[0].length, function(col) {
+        return x.map(function(row) {return row[col];}).reduce(function(l, xi) {
+            return stdMath.max(l, String(xi).length);
+        }, 0);
+    });
+    return x.map(function(row, i) {
+        return '[' + row.map(function(xij, j) {
+            return pad(String(xij), ln[j], ' ');
+        }).join('  ') + ']';
+    }).join('\n');
+}
+function str_nd(x, MAXPRINTSIZE, indices)
+{
+    if (null == indices) indices = [];
+    var str = '', i, n = x.length, lim = stdMath.min(n, stdMath.round(MAXPRINTSIZE/2));
+    for (i=0; i<lim; ++i)
+    {
+        if (is_array(x[i]) && is_array(x[i][0]))
+        {
+            if (is_array(x[i][0][0]))
+            {
+                if (str.length) str += "\n";
+                str += str_nd(x[i], MAXPRINTSIZE, indices.concat(i));
+            }
+            else
+            {
+                if (str.length) str += "\n";
+                str += 'array(' + indices.concat([i, ':', ':']).map(String).join(',') + ') ->' + "\n" + str_2d(x[i], MAXPRINTSIZE);
+            }
+        }
+    }
+    if (lim < n)
+    {
+        if (str.length) str += "\n" + indices.concat(array(size(x).length, function() {return ':';})).map(String).join(' ');
+        for (i=n-lim; i<n; ++i)
+        {
+            if (is_array(x[i]) && is_array(x[i][0]))
+            {
+                if (is_array(x[i][0][0]))
+                {
+                    if (str.length) str += "\n";
+                    str += str_nd(x[i], MAXPRINTSIZE, indices.concat(i));
+                }
+                else
+                {
+                    if (str.length) str += "\n";
+                    str += 'array(' + indices.concat([i, ':', ':']).map(String).join(',') + ') ->' + "\n" + str_2d(x[i], MAXPRINTSIZE);
+                }
+            }
+        }
+    }
+    return str;
 }
 
 // export it

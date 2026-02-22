@@ -4,7 +4,7 @@ View one-dimensional array data, typed array data and/or multi-dimensional array
 
 ![TensorView](/tensorview.jpg)
 
-version: **1.0.0** (9.5 kB minified)
+version: **1.1.0** (9.7 kB minified)
 
 `TensorView` is both memory-efficient and speed-efficient since it only creates ways to view array data as multidimensional tensors **without** actually creating new arrays. One can nevertheless explicitly store a TensorView instance as a single-dimensional or multi-dimensional array using `view.toArray()` or `view.toNDArray()` methods.
 
