@@ -113,3 +113,9 @@ console.log(viewBB.toString());
 console.log('---');
 console.log(viewBB.toString(4));
 console.log('---');
+
+const a = TensorView([1,2,3,4,5,6], {shape:[2,3]});
+console.log(a.toNDArray("row-major"));
+console.log(a.toNDArray("column-major"));
+console.log(a.toArray("row-major"));
+console.log(a.toArray("column-major"));

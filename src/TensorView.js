@@ -1,7 +1,7 @@
 /**
 *  TensorView
 *  View array data as multidimensional tensors of various shapes efficiently
-*  @VERSION 1.1.0
+*  @VERSION 1.2.0
 *  https://github.com/foo123/TensorView
 *
 **/
@@ -356,12 +356,12 @@ function TensorView(data, o, _)
         set(index, indices, arguments[arguments.length-1]);
         return self;
     };
-    self.iterator = function() {
-        var i = 0 < length ? ndim - 1 : -1,
+    self.iterator = function(order) {
+        var i = 0 < length ? ("column-major" === order ? (0) : (ndim-1)) : -1,
             indices = null, ind = null, striding = null, index = 0,
             value = [null, null], ret = {value: null};
         return {next:function next() {
-            if (0 > i)
+            if ((0 > i) || (i >= ndim))
             {
                 indices = ind = striding = ret = value = null;
                 return {done: true};
@@ -372,49 +372,83 @@ function TensorView(data, o, _)
                 {
                     indices = (new Array(ndim)).fill(0);
                     ind = indices.slice();
-                    striding = slicing.map(function(si,i) {return {start:si.start*stride[i], step:si.step*stride[i]};});
-                    index = compute_index(indices, ndim, is_transposed, shape, stride, size, slicing);
+                    striding = slicing.map(function(si, i) {return {start:si.start*stride[i], step:si.step*stride[i]};});
+                    index = compute_index(indices, ndim, "column-major" === order ? !is_transposed : is_transposed, shape, stride, size, slicing);
                     value[0] = get(index, indices);
                     value[1] = ind;
                     ret.value = value;
                 }
                 else
                 {
-                    while (i >= 0 && indices[i]+1 >= size[i])
+                    if ("column-major" === order)
                     {
-                        index -= striding[i].start + indices[i] * striding[i].step;
-                        --i;
-                    }
-                    if (0 <= i)
-                    {
-                        ++indices[i];
-                        ind[i] = indices[i];
-                        index += striding[i].step;
-                        while (i+1 < ndim)
+                        // column-major
+                        while ((i < ndim) && (indices[i]+1 >= size[i]))
                         {
+                            index -= striding[i].start + indices[i] * striding[i].step;
                             ++i;
-                            indices[i] = 0;
-                            ind[i] = 0;
-                            index += striding[i].start;
                         }
-                        value[0] = get(index, indices);
-                        value[1] = ind;
-                        ret.value = value;
+                        if (i < ndim)
+                        {
+                            ++indices[i];
+                            ind[i] = indices[i];
+                            index += striding[i].step;
+                            while (0 <= i-1)
+                            {
+                                --i;
+                                indices[i] = 0;
+                                ind[i] = 0;
+                                index += striding[i].start;
+                            }
+                            value[0] = get(index, indices);
+                            value[1] = ind;
+                            ret.value = value;
+                        }
+                        else
+                        {
+                            indices = ind = striding = ret = value = null;
+                            return {done: true};
+                        }
                     }
                     else
                     {
-                        indices = ind = striding = ret = value = null;
-                        return {done: true};
+                        // row-major
+                        while ((i >= 0) && (indices[i]+1 >= size[i]))
+                        {
+                            index -= striding[i].start + indices[i] * striding[i].step;
+                            --i;
+                        }
+                        if (0 <= i)
+                        {
+                            ++indices[i];
+                            ind[i] = indices[i];
+                            index += striding[i].step;
+                            while (i+1 < ndim)
+                            {
+                                ++i;
+                                indices[i] = 0;
+                                ind[i] = 0;
+                                index += striding[i].start;
+                            }
+                            value[0] = get(index, indices);
+                            value[1] = ind;
+                            ret.value = value;
+                        }
+                        else
+                        {
+                            indices = ind = striding = ret = value = null;
+                            return {done: true};
+                        }
                     }
                 }
                 return ret;
             }
         }};
     };
-    self.forEach = function(f) {
+    self.forEach = function(f, order) {
         if (0 < length && is_function(f))
         {
-            var iter = self.iterator(), next, ret = null;
+            var iter = self.iterator(order || "row-major"), next, ret = null;
             while (true)
             {
                 next = iter.next();
@@ -496,17 +530,31 @@ function TensorView(data, o, _)
         }
         );
     };
-    self.toArray = function(ArrayClass) {
+    self.toArray = function(ArrayClass, order) {
+        if ("string" === typeof ArrayClass)
+        {
+            order = ArrayClass;
+            ArrayClass = Array;
+        }
         var array = new (ArrayClass || Array)(length), index = 0;
         self.forEach(function(di/*,i*/) {
-            // put in row-major order
+            // put in row-major or column-major order
             array[index++] = di;
-        });
+        }, order || "row-major");
         return array;
     };
-    self.toNDArray = function() {
-        var ndarray = ndim ? new Array(size[0]) : [];
-        self.forEach(function(di, i) {
+    self.toNDArray = function(order) {
+        var ndarray = ndim ? new Array(size["column-major" === order ? ndim-1 : 0]) : [];
+        self.forEach("column-major" === order ? function(di, i) {
+            // put in column-major order
+            for (var a=ndarray,n=ndim-1,j=n,ij; j>0; --j)
+            {
+                ij = i[j];
+                if (null == a[ij]) a[ij] = new Array(size[j-1]);
+                a = a[ij];
+            }
+            a[i[0]] = di;
+        } : function(di, i) {
             // put in row-major order
             for (var a=ndarray,n=ndim-1,j=0,ij; j<n; ++j)
             {
@@ -515,7 +563,7 @@ function TensorView(data, o, _)
                 a = a[ij];
             }
             a[i[n]] = di;
-        });
+        }, order || "row-major");
         return ndarray;
     };
     self.toString = function(maxsize) {
@@ -524,7 +572,7 @@ function TensorView(data, o, _)
         return 2 < ndim ? str_nd(ndarray, maxsize) : (2 === ndim ? str_2d(ndarray, maxsize) : str_1d(ndarray, maxsize));
     };
 }
-TensorView.VERSION = '1.1.0';
+TensorView.VERSION = '1.2.0';
 TensorView[proto] = {
     constructor: TensorView,
     dispose: null,

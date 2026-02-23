@@ -4,7 +4,7 @@ View one-dimensional array data, typed array data and/or multi-dimensional array
 
 ![TensorView](/tensorview.jpg)
 
-version: **1.1.0** (9.7 kB minified)
+version: **1.2.0** (10 kB minified)
 
 `TensorView` is both memory-efficient and speed-efficient since it only creates ways to view array data as multidimensional tensors **without** actually creating new arrays. One can nevertheless explicitly store a TensorView instance as a single-dimensional or multi-dimensional array using `view.toArray()` or `view.toNDArray()` methods.
 
@@ -78,8 +78,8 @@ true
 const view  = TensorView(data, options);
 
 const data = view.data(); // underlying data of view
-const array = view.toArray(ArrayClass=Array); // create single-dimensional array or typed array from view
-const ndarray = view.toNDArray(); // create multi-dimensional array from view having the same shape
+const array = view.toArray(ArrayClass=Array, order="row-major"); // create single-dimensional array or typed array from view
+const ndarray = view.toNDArray(order="row-major"); // create multi-dimensional array from view having the same shape
 const string = view.toString(); // render view to string
 const dim = view.dimension(); // dimension of view, eg 1 for 1d, 2 for 2d, 3 for 3d, ..
 const shape = view.shape(); // shape of view along all dimensions
@@ -99,7 +99,7 @@ const value = view.get(indices); // get value based on indices of same dimension
 view.set(indices, value); // set value at indices
 // NOTE: underlying data will change in all views which use this data and all views which depend on views which use this data
 
-view.forEach(function(data_i, i, data, view) {/*..*/}); // forEach method
+view.forEach(function(data_i, i, data, view) {/*..*/}, order="row-major"); // forEach method
 for (let [data_i, i] of view) {/*..*/} // similar as iterator protocol
 
 view.op(op, otherView=null); // apply lazy, when requested, pointwise operation op(view, otherView) or op(view)
