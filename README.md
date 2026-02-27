@@ -129,10 +129,10 @@ view.forEach(function(data_i, i, data, view) {/*..*/}, order="row-major"); // fo
 for (let [data_i, i] of view) {/*..*/} // similar as iterator protocol
 
 // creating an actual copy and not share data is easy to do in various ways, eg:
-const copied = TensorView(view.toArray(), {shape: view.size()}); // any active slicing and/or operation will be applied on view output
+const copied = TensorView(view.toArray(), {shape: view.shape()});
 
 view.dispose(); // dispose view if no longer needed
-NOTE: will affect all views which depend on this view (eg concatenated views, sliced views, ..), so take care
+NOTE: will affect any other active views which depend on this view (eg concatenated views, sliced views, ..), so take note
 ```
 
 **see also:**
