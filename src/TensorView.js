@@ -144,16 +144,23 @@ function TensorView(data, o, _)
         if (!same_shape) aux_indices = new Array(nd_shape.length);
     }
 
-    stride = new Array(ndim);
-    if (is_transposed)
+    if (Array.isArray(o.stride) && (o.stride.length === shape.length))
     {
-        stride[0] = 1;
-        for (axis=1; axis<ndim; ++axis) stride[axis] = stride[axis-1] * shape[axis-1];
+        stride = o.stride;
     }
     else
     {
-        stride[ndim-1] = 1;
-        for (axis=ndim-2; axis>=0; --axis) stride[axis] = stride[axis+1] * shape[axis+1];
+        stride = new Array(ndim);
+        if (is_transposed)
+        {
+            stride[0] = 1;
+            for (axis=1; axis<ndim; ++axis) stride[axis] = stride[axis-1] * shape[axis-1];
+        }
+        else
+        {
+            stride[ndim-1] = 1;
+            for (axis=ndim-2; axis>=0; --axis) stride[axis] = stride[axis+1] * shape[axis+1];
+        }
     }
 
     length = ndim ? total : 0;
@@ -190,7 +197,7 @@ function TensorView(data, o, _)
         configurable: false
     });
     self.shape = function(axis) {
-        return arguments.length ? shape[axis] : shape.slice();
+        return true === axis ? shape : (arguments.length ? shape[axis] : shape.slice());
     };
     self.index = function(/*indices*/) {
         return compute_index(index_getter, Array.isArray(arguments[0]) ? arguments[0] : arguments, ndim, is_transposed, shape, stride);
@@ -205,10 +212,7 @@ function TensorView(data, o, _)
         var indices = Array.isArray(arguments[0]) ? arguments[0] : arguments, index = 0;
         if (indices.length < ndim) throw "TensorView::get:indices do not match shape dimension!";
         index = compute_index(index_getter, indices, ndim, is_transposed, shape, stride);
-        if (0 > index || index >= total)
-        {
-            throw "TensorView::get:index ("+index+") is out of bounds (0,"+(total-1)+")!";
-        }
+        if (0 > index || index >= total) throw "TensorView::get:index ("+index+") is out of bounds (0,"+(total-1)+")!";
         return get(index, indices);
     };
     self.set = function(/*indices, value*/) {
@@ -223,7 +227,7 @@ function TensorView(data, o, _)
     self.iterator = function(order) {
         var axis = 0 < length ? ("column-major" === order ? (0) : (ndim-1)) : -1,
             indices = null, ind = null, index = 0,
-            value = [null, null], ret = {value: null};
+            value = [null, null, null], ret = {value: null};
         return {next:function next() {
             if ((0 > axis) || (axis >= ndim))
             {
@@ -239,6 +243,7 @@ function TensorView(data, o, _)
                     index = 0;
                     value[0] = get(index, indices);
                     value[1] = ind;
+                    value[2] = index;
                     ret.value = value;
                 }
                 else
@@ -264,6 +269,7 @@ function TensorView(data, o, _)
                             }
                             value[0] = get(index, indices);
                             value[1] = ind;
+                            value[2] = index;
                             ret.value = value;
                         }
                         else
@@ -293,6 +299,7 @@ function TensorView(data, o, _)
                             }
                             value[0] = get(index, indices);
                             value[1] = ind;
+                            value[2] = index;
                             ret.value = value;
                         }
                         else
@@ -438,47 +445,6 @@ function TensorView(data, o, _)
             }
         });
     };
-    self.toArray = function(ArrayClass, order) {
-        if ("string" === typeof ArrayClass)
-        {
-            order = ArrayClass;
-            ArrayClass = Array;
-        }
-        var array = new (ArrayClass || Array)(length), index = 0;
-        self.forEach(function(di/*,i*/) {
-            // put in row-major or column-major order
-            array[index++] = di;
-        }, order || "row-major");
-        return array;
-    };
-    self.toNDArray = function(order) {
-        var ndarray = ndim ? new Array(shape["column-major" === order ? ndim-1 : 0]) : [];
-        self.forEach("column-major" === order ? function(di, i) {
-            // put in column-major order
-            for (var a=ndarray,n=ndim-1,j=n,ij; j>0; --j)
-            {
-                ij = i[j];
-                if (null == a[ij]) a[ij] = new Array(shape[j-1]);
-                a = a[ij];
-            }
-            a[i[0]] = di;
-        } : function(di, i) {
-            // put in row-major order
-            for (var a=ndarray,n=ndim-1,j=0,ij; j<n; ++j)
-            {
-                ij = i[j];
-                if (null == a[ij]) a[ij] = new Array(shape[j+1]);
-                a = a[ij];
-            }
-            a[i[n]] = di;
-        }, order || "row-major");
-        return ndarray;
-    };
-    self.toString = function(maxsize) {
-        if (null == maxsize) maxsize = Infinity;
-        var ndarray = self.toNDArray();
-        return 2 < ndim ? str_nd(ndarray, shape, maxsize) : (2 === ndim ? str_2d(ndarray, shape, maxsize) : str_1d(ndarray, shape, maxsize));
-    };
 }
 TensorView.VERSION = '2.0.0';
 TensorView[proto] = {
@@ -499,9 +465,49 @@ TensorView[proto] = {
     squeeze: null,
     slice: null,
     concat: null,
-    toArray: null,
-    toNDArray: null,
-    toString: null
+    toArray: function(ArrayClass, order) {
+        if ("string" === typeof ArrayClass)
+        {
+            order = ArrayClass;
+            ArrayClass = Array;
+        }
+        var self = this, array = new (ArrayClass || Array)(self.length), index = 0;
+        self.forEach(function(di/*,i*/) {
+            // put in row-major or column-major order
+            array[index++] = di;
+        }, order || "row-major");
+        return array;
+    },
+    toNDArray: function(order) {
+        var self = this, shape = self.shape(true), ndim = shape.length,
+            ndarray = ndim ? new Array(shape["column-major" === order ? ndim-1 : 0]) : [];
+        self.forEach("column-major" === order ? function(di, i) {
+            // put in column-major order
+            for (var a=ndarray,n=ndim-1,j=n,ij; j>0; --j)
+            {
+                ij = i[j];
+                if (null == a[ij]) a[ij] = new Array(shape[j-1]);
+                a = a[ij];
+            }
+            a[i[0]] = di;
+        } : function(di, i) {
+            // put in row-major order
+            for (var a=ndarray,n=ndim-1,j=0,ij; j<n; ++j)
+            {
+                ij = i[j];
+                if (null == a[ij]) a[ij] = new Array(shape[j+1]);
+                a = a[ij];
+            }
+            a[i[n]] = di;
+        }, order || "row-major");
+        return ndarray;
+    },
+    toString: function(maxsize, stringify) {
+        if (!is_function(stringify)) stringify = function(x) {return String(x);};
+        if ('number' !== typeof maxsize) maxsize = Infinity;
+        var self = this, shape = self.shape(), ndim = shape.length, ndarray = self.toNDArray();
+        return 2 < ndim ? str_nd(ndarray, shape, maxsize, stringify) : (2 === ndim ? str_2d(ndarray, shape, maxsize, stringify) : str_1d(ndarray, shape, maxsize, stringify));
+    }
 };
 if (('undefined' !== typeof Symbol) && ('undefined' !== typeof Symbol.iterator))
 {
@@ -665,15 +671,15 @@ function project(x, i, j)
     }
     return x;
 }
-function str_1d(x, shape, MAXPRINTSIZE)
+function str_1d(x, shape, MAXPRINTSIZE, stringify)
 {
     if (shape[0] > MAXPRINTSIZE)
     {
         x = x.slice(0, stdMath.round(MAXPRINTSIZE/2)).concat(['..']).concat(x.slice(-stdMath.round(MAXPRINTSIZE/2)+1));
     }
-    return '[' + x.map(function(xi) {return String(xi);}).join('  ') + ']';
+    return '[' + x.map(stringify).join('  ') + ']';
 }
-function str_2d(x, shape, MAXPRINTSIZE)
+function str_2d(x, shape, MAXPRINTSIZE, stringify)
 {
     var use_ddots = false;
     if (shape[1] > MAXPRINTSIZE)
@@ -689,31 +695,32 @@ function str_2d(x, shape, MAXPRINTSIZE)
     }
     var ln = array(x[0].length, function(col) {
         return x.map(function(row) {return row[col];}).reduce(function(l, xi) {
-            return stdMath.max(l, String(xi).length);
+            return stdMath.max(l, stringify(xi).length);
         }, 0);
     });
     return x.map(function(row, i) {
         return '[' + row.map(function(xij, j) {
-            return pad(String(xij), ln[j], ' ');
+            return pad(stringify(xij), ln[j], ' ');
         }).join('  ') + ']';
     }).join('\n');
 }
-function str_nd(x, shape, MAXPRINTSIZE, indices)
+function str_nd(x, shape, MAXPRINTSIZE, stringify, indices)
 {
     if (null == indices) indices = [];
-    var str = '', ind, i, n = shape[shape.length-1], lim;
+    var str = '', ind, i, n, lim;
     if (shape.length === 2 + indices.length)
     {
         ind = [':', ':'].concat(indices);
-        str += 'array(' + ind.map(String).join(',') + ') ->' + "\n" + str_2d(project(x, ind), shape, MAXPRINTSIZE);
+        str += 'array(' + ind.map(String).join(',') + ') ->' + "\n" + str_2d(project(x, ind), shape, MAXPRINTSIZE, stringify);
     }
     else
     {
+        n = shape[2+indices.length];
         lim = stdMath.min(n, stdMath.round(MAXPRINTSIZE/2));
         for (i=0; i<lim; ++i)
         {
             if (str.length) str += "\n";
-            str += str_nd(x, shape, MAXPRINTSIZE, indices.concat(i));
+            str += str_nd(x, shape, MAXPRINTSIZE, stringify, indices.concat(i));
         }
         if (lim < n)
         {
@@ -721,7 +728,7 @@ function str_nd(x, shape, MAXPRINTSIZE, indices)
             for (i=n-lim; i<n; ++i)
             {
                 if (str.length) str += "\n";
-                str += str_nd(x, shape, MAXPRINTSIZE, indices.concat(i));
+                str += str_nd(x, shape, MAXPRINTSIZE, stringify, indices.concat(i));
             }
         }
     }
