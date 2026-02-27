@@ -2,17 +2,9 @@
 
 const TensorView = require('../src/TensorView.js');
 
-const v1 = TensorView([1,2,3,4,5,6,7,8,9,0], {shape:[2,5]});
-const v2 = v1.slice(':','2:4');
-const v3 = v2.slice('1',':');
-console.log(v1.toNDArray());
-console.log(v2.toNDArray());
-console.log(v3.toNDArray());
-return;
-
 const t = TensorView([1,2,3,4,5,6], {shape:[2,3]}).slice(':','1:2');
 const T = t.transpose();
-const r = TensorView([[1,2,3],[4,5,6]], {ndarray:[2,3],shape:[3,2]});
+const r = TensorView([[1,2,3],[4,5,6]], {shape:[3,2]});
 const R = r.transpose();
 const R2 = r.reshape([2,3]).slice(':','1:2');
 console.log(t.toNDArray());
@@ -33,8 +25,6 @@ console.log(R2.shape());
 for (let [di, i] of t) console.log([di, i.slice()]);
 T.forEach((di, i) => console.log([di, i.slice()]));
 
-const add = (a, b) => a + b;
-const mul = (a, b) => a * b;
 const data = [1,2,3,4,5,6,7,8,9,10];
 const data1 = [1,2,3,4,5,6];
 const data2 = [7,8,9,10,11,12];
@@ -42,7 +32,7 @@ const bigdata = [1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,
 
 const view1 = TensorView(data, {shape:[2,5]});
 const view2 = TensorView(data, {shape:[5,2]});
-const view2C = TensorView([[1,2,3,4,5],[6,7,8,9,10]], {shape:[5,2],ndarray:[2,5]});
+const view2C = TensorView([[1,2,3,4,5],[6,7,8,9,10]], {shape:[5,2]});
 const view2T = view2.transpose();
 const view3 = TensorView(data, {shape:[5,2]});
 const view3T = view3.transpose();
@@ -53,17 +43,12 @@ const view5 = view4.slice('2:-2:0',':');
 const view12 = TensorView(data1, {shape:[2,3]}).concat(TensorView(data2, {shape:[2,3]}), 0);
 const view12S = view12.slice('2:-2:0','0:2:2');
 const view12T = view12S.transpose();
-const sum = view1.op(add, view1);
 const viewB = TensorView(bigdata, {shape:[5,2,10]});
 const viewBB = TensorView(bigdata, {shape:[5,2,5,2]});
 
 console.log(view1.toString());
 console.log(view1.toNDArray());
 console.log(view1.toArray());
-console.log('---');
-console.log(sum.toString());
-console.log(sum.toNDArray());
-console.log(sum.toArray());
 console.log('---');
 console.log(view2.toString());
 console.log(view2.toNDArray());
