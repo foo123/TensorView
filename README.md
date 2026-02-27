@@ -132,7 +132,7 @@ for (let [data_i, i] of view) {/*..*/} // similar as iterator protocol
 const copied = TensorView(view.toArray(), {shape: view.shape()});
 
 view.dispose(); // dispose view if no longer needed
-NOTE: will affect any other active views which depend on this view (eg concatenated views, sliced views, ..), so take note
+// NOTE: will affect any other active views which depend on this view (eg concatenated views, sliced views, ..), so take note
 ```
 
 **see also:**
