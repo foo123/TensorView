@@ -4,7 +4,7 @@ View one-dimensional array data, typed array data and/or multi-dimensional array
 
 ![TensorView](/tensorview.jpg)
 
-version: **2.0.0** (9 kB minified)
+version: **2.0.0 in progress** (12 kB minified)
 
 `TensorView` is both memory-efficient and speed-efficient since it only creates ways to view array data as multidimensional tensors **without** actually creating new arrays. One can nevertheless explicitly store a TensorView instance as a single-dimensional or multi-dimensional array using `view.toArray()` or `view.toNDArray()` methods.
 
@@ -100,8 +100,10 @@ true true
 
 ```javascript
 // data=single value or single-dimensional array or typed array or multi-dimensional array
-// options={shape?:Array}
+// options={shape?:Array, in_order?:Array, out_order?:Array}
 // shape array defines shape of view
+// in_order array defines order of dimensions when reading data
+// out_order array defines order of dimensions when outputing data
 const view  = TensorView(data, options);
 
 const data = view.data; // underlying data of view
@@ -111,15 +113,17 @@ const length = view.length; // actual length of view (eg if saved as array)
 const shape = view.shape(); // shape of view along all dimensions
 const shapeForAxis = view.shape(axis); // shape of view along `axis` dimension
 
-const array = view.toArray(ArrayClass=Array, order="row-major"); // create single-dimensional array or typed array from view
-const ndarray = view.toNDArray(order="row-major"); // create multi-dimensional array from view having the same shape
+const array = view.toArray(ArrayClass=Array); // create single-dimensional array or typed array from view
+const ndarray = view.toNDArray(); // create multi-dimensional array from view having the same shape
 const string = view.toString(); // render view to string
 
 const transpose = view.transpose(); // transposed view
-const reshaped = view.reshape(newShape); // view with different shape
-const slice = view.slice(":", "a:b", "a:s:b", ..); // sliced view from a to b (included) with step s, ..
-const concatenated = view.concat([view2, view3, ..], axis=0); // concatenate multiple similar views along some `axis` axis
-const squeezed = view.squeeze(); // get view with any dimension along some axis of length 1 removed
+const reshaped = view.reshape(new_shape); // view with different shape
+const reordered = view.reorder(new_in_order, new_out_order); // view with different in/out order
+const permuted = view.permute(permutation); // view with permuted dimensions
+const slice = view.slice(":", "a,b", "a:b", "a:s:b", ..); // sliced view a and b, from a to b (included) with step s, ..
+const concatenated = view.concat([view2, view3, ..], axis=0); // concatenate multiple similar views along some `axis` axis or "newaxis"
+const squeezed = view.squeeze(start_axis=0); // get view with any dimension along some axis of length 1 removed
 
 const value = view.get(indices); // get value based on indices of same dimension as view shape
 view.set(indices, value); // set value at indices
