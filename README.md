@@ -4,7 +4,7 @@ View one-dimensional array data, typed array data and/or multi-dimensional array
 
 ![TensorView](/tensorview.jpg)
 
-version: **2.0.0 in progress** (12 kB minified)
+version: **2.0.0** (12 kB minified)
 
 `TensorView` is both memory-efficient and speed-efficient since it only creates ways to view array data as multidimensional tensors **without** actually creating new arrays. One can nevertheless explicitly store a TensorView instance as a single-dimensional or multi-dimensional array using `view.toArray()` or `view.toNDArray()` methods.
 
@@ -38,10 +38,10 @@ console.log(m3.toArray());
 console.log(m.data === m2.data, m.data === m3.data) // uses same data
 
 // iterator protocol
-for (let [data_i, i] of s) console.log([data_i, i.slice()]); // i is multi-dimensional index in general
+for (let [item, index] of s) console.log([item, index.slice()]); // index is array of multidimensional indices
 
 // same as
-s.forEach((data_i, i) => console.log([data_i, i.slice()])); // i is multi-dimensional index in general
+s.forEach((item, index) => console.log([item, index.slice()])); // index is array of multidimensional indices
 ```
 
 **Output**
@@ -100,42 +100,84 @@ true true
 
 ```javascript
 // data=single value or single-dimensional array or typed array or multi-dimensional array
-// options={shape?:Array, in_order?:Array, out_order?:Array}
-// shape array defines shape of view
-// in_order array defines order of dimensions when reading data
-// out_order array defines order of dimensions when outputing data
+// options={shape?:Array, stride?:Array, in_order?:Array, out_order?:Array}
+// shape array defines desired shape of view
+// stride array defines strides for each dimension of view (optional)
+// in_order array defines order of dimension traversal when reading from data (optional)
+// out_order array defines order of dimension traversal when writing to data (optional)
 const view  = TensorView(data, options);
 
-const data = view.data; // underlying data of view
-const dim = view.dimension; // dimension of view, eg 1 for 1d, 2 for 2d, 3 for 3d, ..
-const length = view.length; // actual length of view (eg if saved as array)
+// underlying data of view
+const data = view.data;
+// dimension of view, eg 1 for 1d, 2 for 2d, 3 for 3d, ..
+const dim = view.dimension;
+// actual length of view (eg if saved as array)
+const length = view.length;
 
-const shape = view.shape(); // shape of view along all dimensions
-const shapeForAxis = view.shape(axis); // shape of view along `axis` dimension
+// shape array of view along all dimensions
+const shape = view.shape();
+// shape of view along `axis` dimension
+const shapeForAxis = view.shape(axis);
 
-const array = view.toArray(ArrayClass=Array); // create single-dimensional array or typed array from view
-const ndarray = view.toNDArray(); // create multi-dimensional array from view having the same shape
-const string = view.toString(); // render view to string
+// stride array of view along all dimensions
+const stride = view.stride();
+// stride for `axis` dimension
+const strideForAxis = view.stride(axis);
 
-const transpose = view.transpose(); // transposed view
-const reshaped = view.reshape(new_shape); // view with different shape
-const reordered = view.reorder(new_in_order, new_out_order); // view with different in/out order
-const permuted = view.permute(permutation); // view with permuted dimensions
-const slice = view.slice(":", "a,b", "a:b", "a:s:b", ..); // sliced view a and b, from a to b (included) with step s, ..
-const concatenated = view.concat([view2, view3, ..], axis=0); // concatenate multiple similar views along some `axis` axis or "newaxis"
-const squeezed = view.squeeze(start_axis=0); // get view with any dimension along some axis of length 1 removed
+// create single-dimensional array or typed array from view
+const array = view.toArray(ArrayClass=Array);
 
-const value = view.get(indices); // get value based on indices of same dimension as view shape
-view.set(indices, value); // set value at indices
+// create multi-dimensional array from view having the same shape
+const ndarray = view.toNDArray();
+
+// render view to string,
+// maxSize defines max number of items to display along a dimension (default Infinity)
+// stringify defines custom stringifier function (default toString)
+const string = view.toString(maxSize=Infinity, stringify=String);
+
+// transposed view
+const transposed = view.transpose();
+
+// view with different shape
+const reshaped = view.reshape(new_shape);
+
+// view with different in/out order
+const reordered = view.reorder(new_in_order, new_out_order);
+
+// view with permuted dimensions
+const permuted = view.permute(permutation);
+
+// sliced view with whole axis,
+// or only a and b indices,
+// or from indices a to b (included),
+// or from indices a to b (included) with step s,
+// etc..
+const sliced = view.slice(":", "a,b,..", "a:b", "a:s:b" /*, ..*/);
+
+// concatenate multiple views along on_axis axis or "newaxis"
+const concatenated = view.concat([view2, view3 /*, ..*/], on_axis=0);
+
+// get view with any dimension along some axis (after start_axis) of length 1 removed
+const squeezed = view.squeeze(start_axis=0);
+
+// get value based on multidimensional indices of same dimension as view shape
+const value = view.get(indices);
+
+// set value at multidimensional indices
+view.set(indices, value);
 // NOTE: underlying data will change in all views which use this data and all views which depend on views which use this data
 
-view.forEach(function(data_i, i, data, view) {/*..*/}, order="row-major"); // forEach method
-for (let [data_i, i] of view) {/*..*/} // similar as iterator protocol
+// forEach method
+view.forEach(function(item, index, data, view) {/*..*/});
+
+// similar as iterator protocol
+for (let [item, index] of view) {/*..*/}
 
 // creating an actual copy and not share data is easy to do in various ways, eg:
-const copied = TensorView(view.toArray(), {shape: view.shape()});
+const viewcopy = TensorView(view.toArray(), {shape: view.shape()});
 
-view.dispose(); // dispose view if no longer needed
+// dispose view if no longer needed
+view.dispose();
 // NOTE: will affect any other active views which depend on this view (eg concatenated views, sliced views, ..), so take note
 ```
 

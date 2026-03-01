@@ -99,15 +99,17 @@ function TensorView(data, o, _)
     setter = _ && is_function(_.set) ? _.set : null;
     shape = o.shape;
     ordout = o.out_order;
-    ordin = o.in_order || ordout;
+    ordin = o.in_order;
+    stride = o.stride;
 
     if (data instanceof TensorView)
     {
         ref = data;
         data = ref.data;
         shape = shape || ref.shape();
-        ordout = ordout || ref.out_order();
+        //stride = stride || ref.stride();
         ordin = ordin || ref.in_order();
+        ordout = ordout || ref.out_order();
         //total = ref.length;
         computed_total = total = product(shape);
     }
@@ -143,7 +145,10 @@ function TensorView(data, o, _)
     ordin = compute_order(ndim, ordin);
     ordout = compute_order(ndim, ordout);
 
-    stride = compute_stride(ndim, shape, ordin, ordout, is_transposed);
+    if (!is_array(stride, true) || (stride.length !== ndim))
+    {
+        stride = compute_stride(ndim, shape, ordin, ordout, is_transposed);
+    }
 
     if (nd_shape)
     {
@@ -309,16 +314,16 @@ function TensorView(data, o, _)
         }
     };
     self.transpose = function() {
-        return ref && is_transposed ? ref /*idempotent*/ : new TensorView(self, {shape: shape.slice().reverse(), in_order: ordin.slice(), out_order: ordout.slice()}, {transposed: !is_transposed});
+        return ref && is_transposed ? ref /*idempotent*/ : new TensorView(self, {shape: shape.slice().reverse(), stride: stride.slice().reverse(), in_order: ordin.slice(), out_order: ordout.slice()}, {transposed: !is_transposed});
     };
     self.reorder = function(new_in_order, new_out_order) {
         new_in_order = compute_order(ndim, new_in_order || ordin.slice());
         new_out_order = compute_order(ndim, new_out_order || ordout.slice());
         if (new_in_order.length !== ndim || new_out_order.length !== ndim)
         {
-            throw "TensorView::reorder ordin not valid or does not match shape dimension!";
+            throw "TensorView::reorder order not valid or does not match shape dimension!";
         }
-        return ordin.length === ordin.filter(function(axis, i) {return axis === new_in_order[i];}).length && ordout.length === ordout.filter(function(axis, i) {return axis === new_out_order[i];}).length ? self /*idempotent*/ : new TensorView(!ref && (null != data) ? data : self, {shape: shape.slice(), in_order: new_in_order, out_order: new_out_order});
+        return ordin.length === ordin.filter(function(axis, i) {return axis === new_in_order[i];}).length && ordout.length === ordout.filter(function(axis, i) {return axis === new_out_order[i];}).length ? self /*idempotent*/ : new TensorView(!ref && (null != data) ? data : self, {shape: shape.slice(), stride: stride.slice(), in_order: new_in_order, out_order: new_out_order});
     };
     self.reshape = function(new_shape) {
         var new_ndim = new_shape.length;
@@ -353,9 +358,9 @@ function TensorView(data, o, _)
                 });
             };
         return permutation.length === permutation.filter(function(pi, i) {return pi === i;}).length ? self /*identity*/ : new TensorView(self, {
-            shape: new_shape,
+            shape: new_shape/*,
             in_order: ordin.slice(),
-            out_order: ordout.slice()
+            out_order: ordout.slice()*/
         }, {
             get: function(indices) {
                 if (indices.length < ndim) throw "TensorView::get indices do not match shape dimension!";
