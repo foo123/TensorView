@@ -19,9 +19,9 @@ else
 "use strict";
 
 var proto = 'prototype',
+    NOP = function() {},
     stdMath = Math,
     def = Object.defineProperty,
-    NOP = function() {},
     TypedArray = "undefined" !== typeof Float32Array ? Object.getPrototypeOf(Float32Array) : null;
 
 function TensorView(data, o, _)
@@ -32,39 +32,36 @@ function TensorView(data, o, _)
         nd_shape = null,
         shape = null,
         ndim = 0,
-        ordin = null,
-        ordout = null,
         stride = null,
         ref = null,
         is_transposed = false,
         is_value = false,
         same_shape = false,
-        length = 0,
         total = 0,
         computed_total = null,
         aux_indices = null,
-        index_getter,
-        indices_getter,
         getter, setter;
 
     function get(index, indices)
     {
+        var ret;
         if (getter)
         {
-            return getter(indices);
+            ret = getter(indices);
         }
         else if (ref)
         {
-            return ref.get(ref.indices(index));
+            ret = ref.get(ref.indices(index));
         }
         else if (nd_shape)
         {
-            return walk(data, same_shape ? indices : compute_indices(null, index, nd_shape.length, false, nd_shape, null, null, aux_indices));
+            ret = walk(data, same_shape ? indices : compute_indices(index, nd_shape.length, false, nd_shape, aux_indices));
         }
         else
         {
-            return is_value ? data : data[index];
+            ret = is_value ? data : data[index];
         }
+        return ret;
     }
     function set(index, indices, value)
     {
@@ -78,7 +75,7 @@ function TensorView(data, o, _)
         }
         else if (nd_shape)
         {
-            walk(data, same_shape ? indices : compute_indices(null, index, nd_shape.length, false, nd_shape, null, null, aux_indices), value);
+            walk(data, same_shape ? indices : compute_indices(index, nd_shape.length, false, nd_shape, aux_indices), value);
         }
         else if (is_value)
         {
@@ -93,13 +90,10 @@ function TensorView(data, o, _)
     o = o || {};
 
     is_transposed = _ ? !!_.transposed : false;
-    index_getter = _ && is_function(_.index) ? _.index : null;
-    indices_getter = _ && is_function(_.indices) ? _.indices : null;
     getter = _ && is_function(_.get) ? _.get : null;
     setter = _ && is_function(_.set) ? _.set : null;
+
     shape = o.shape;
-    ordout = o.out_order;
-    ordin = o.in_order;
     stride = o.stride;
 
     if (data instanceof TensorView)
@@ -108,8 +102,6 @@ function TensorView(data, o, _)
         data = ref.data;
         shape = shape || ref.shape();
         //stride = stride || ref.stride();
-        ordin = ordin || ref.in_order();
-        ordout = ordout || ref.out_order();
         //total = ref.length;
         computed_total = total = product(shape);
     }
@@ -142,33 +134,26 @@ function TensorView(data, o, _)
     if (computed_total !== total) throw "TensorView shape ("+shape.join(',')+") does not match size "+String(total);
     ndim = shape.length;
 
-    ordin = compute_order(ndim, ordin);
-    ordout = compute_order(ndim, ordout);
-
     if (!is_array(stride, true) || (stride.length !== ndim))
     {
-        stride = compute_stride(ndim, shape, ordin, ordout, is_transposed);
+        stride = compute_stride(ndim, shape, is_transposed);
     }
 
     if (nd_shape)
     {
-        same_shape = (nd_shape.length === shape.length) && (nd_shape.length === shape.filter(function(dim, axis) {return dim === nd_shape[axis];}).length) && (ordin.length === ordin.filter(function(axis, i) {return axis === i;}).length) && (ordout.length === ordout.filter(function(axis, i) {return axis === i;}).length);
+        same_shape = (nd_shape.length === shape.length) && (nd_shape.length === shape.filter(function(dim, axis) {return dim === nd_shape[axis];}).length);
         if (!same_shape) aux_indices = new Array(nd_shape.length);
     }
 
-    length = ndim ? total : 0;
+    if (!ndim) total = 0;
     o = _ = null;
 
     self.dispose = function() {
         ref = null;
         data = null;
         shape = null;
-        ordin = null;
-        ordout = null;
         stride = null;
         nd_shape = null;
-        index_getter = null;
-        indices_getter = null;
         getter = null;
         setter = null;
         aux_indices = null;
@@ -186,54 +171,25 @@ function TensorView(data, o, _)
         configurable: false
     });
     def(self, 'length', {
-        get: function() {return length;},
+        get: function() {return total;},
         set: NOP,
         enumerable: true,
         configurable: false
     });
     self.shape = function(axis) {
-        return true === axis ? shape : (arguments.length ? shape[axis] : shape.slice());
-    };
-    self.in_order = function() {
-        return true === arguments[0] ? ordin : (ordin.slice());
-    };
-    self.out_order = function() {
-        return true === arguments[0] ? ordout : (ordout.slice());
+        return arguments.length ? shape[axis] : shape.slice();
     };
     self.stride = function(axis) {
-        return true === axis ? stride : (arguments.length ? stride[axis] : stride.slice());
+        return arguments.length ? stride[axis] : stride.slice();
     };
-    self.index = function(/*indices*/) {
-        return compute_index(index_getter, is_array(arguments[0], true) ? arguments[0] : arguments, ndim, is_transposed, shape, ordin, ordout, stride);
-    };
-    self.indices = function(index) {
-        index = index || 0;
-        if (0 > index) index += total;
-        if (0 > index || index >= total) throw "TensorView::indices index ("+index+") is out of bounds (0,"+(total-1)+")!";
-        return compute_indices(indices_getter, index, ndim, is_transposed, shape, ordin, ordout);
-    };
-    self.get = function(/*indices*/) {
-        var indices = is_array(arguments[0], true) ? arguments[0] : arguments, index = 0;
-        if (indices.length < ndim) throw "TensorView::get indices do not match shape dimension!";
-        index = compute_index(index_getter, indices, ndim, is_transposed, shape, ordin, ordout, stride);
-        if (0 > index || index >= total) throw "TensorView::get index ("+index+") is out of bounds (0,"+(total-1)+")!";
-        return get(index, indices);
-    };
-    self.set = function(/*indices, value*/) {
-        var indices = arguments, count = arguments.length-1, index = 0;
-        if (is_array(arguments[0], true)) {indices = arguments[0]; count = indices.length;}
-        if (count < ndim) throw "TensorView::set indices do not match shape dimension!";
-        index = compute_index(index_getter, indices, ndim, is_transposed, shape, ordin, ordout, stride);
-        if (0 > index || index >= total) throw "TensorView::set index ("+index+") is out of bounds (0,"+(total-1)+")!";
-        set(index, indices, arguments[arguments.length-1]);
-        return self;
-    };
-    self.iterator = function() {
-        var axis = 0 < length ? ndim-1 : -1, dax = -1, ax = axis,
-            indices = null, ind = null, index = 0, indx = 0,
+    self.iterator = function(type, dir) {
+        type = "setter" === type ? "setter" : "getter";
+        dir = -1 === dir ? -1 : 1;
+        var axis = 0 < total ? ndim-1 : -1, dax = -1,
+            indices = null, ind = null, index = 0,
             value = [null, null, null], ret = {value: null};
-        return {next:function next() {
-            if ((0 > ax) || (ax >= ndim))
+        return {next:function next(arg) {
+            if ((0 > axis) || (axis >= ndim))
             {
                 indices = ind = ret = value = null;
                 return {done: true};
@@ -242,52 +198,61 @@ function TensorView(data, o, _)
             {
                 if (!indices)
                 {
-                    indices = array(ndim, 0);
-                    index = 0;
+                    if (-1 === dir)
+                    {
+                        index = total-1;
+                        ind = array(ndim, function(axis) {return shape[axis]-1;});
+                    }
+                    else
+                    {
+                        index = 0;
+                        ind = array(ndim, 0);
+                    }
+                    indices = ind.slice();
 
-                    ind = indices.slice();
-                    indx = 0;
-
-                    value[0] = get(index, indices);
-                    value[1] = ind;
-                    value[2] = indx;
+                    if ("setter" === type)
+                    {
+                        set(index, ind, arg);
+                        value[0] = arg;
+                    }
+                    else
+                    {
+                        value[0] = get(index, ind);
+                    }
+                    value[1] = indices;
+                    value[2] = index;
                     ret.value = value;
                 }
                 else
                 {
-                    while ((0 <= ax && ax < ndim) && (ind[ordout[ax]]+1 >= shape[ordout[ax]]))
+                    while ((0 <= axis && axis < ndim) && (0 > ind[axis]+dir || ind[axis]+dir >= shape[axis]))
                     {
-                        //indx -= ind[ordout[ax]] * stride[ordout[ax]];
-                        ax += dax;
+                        index -= dir * ind[axis] * stride[axis];
+                        axis += dax;
                     }
 
-                    if (0 <= ax && ax < ndim)
+                    if (0 <= axis && axis < ndim)
                     {
-                        ++ind[ordout[ax]];
-                        ++indx;//indx += stride[ordout[ax]];
-                        while (0 <= ax-dax && ax-dax < ndim)
-                        {
-                            ax -= dax;
-                            ind[ordout[ax]] = 0;
-                        }
-
-                        while ((0 <= axis && axis < ndim) && (indices[ordin[axis]]+1 >= shape[ordin[axis]]))
-                        {
-                            index -= indices[ordin[axis]] * stride[ordin[axis]];
-                            axis += dax;
-                        }
-
-                        ++indices[ordin[axis]];
-                        index += stride[ordin[axis]];
+                        index += dir * stride[axis];
+                        ind[axis] += dir;
+                        indices[axis] = ind[axis];
                         while (0 <= axis-dax && axis-dax < ndim)
                         {
                             axis -= dax;
-                            indices[ordin[axis]] = 0;
+                            indices[axis] = ind[axis] = -1 === dir ? shape[axis]-1 : 0;
                         }
 
-                        value[0] = get(index, indices);
-                        value[1] = ind;
-                        value[2] = indx;
+                        if ("setter" === type)
+                        {
+                            set(index, ind, arg);
+                            value[0] = arg;
+                        }
+                        else
+                        {
+                            value[0] = get(index, ind);
+                        }
+                        value[1] = indices;
+                        value[2] = index;
                         ret.value = value;
                     }
                     else
@@ -300,30 +265,107 @@ function TensorView(data, o, _)
             }
         }};
     };
-    self.forEach = function(f, ordin) {
-        if (0 < length && is_function(f))
+    self.forEach = function(f) {
+        if ((0 < total) && is_function(f))
         {
             var iter = self.iterator(), next, ret = null;
             for (;;)
             {
                 next = iter.next();
-                if (!next || next.done) return;
+                if (!next || next.done) return self;
                 ret = f(next.value[0], next.value[1]/*, next.value[2]*/, data, self);
-                if (false === ret) return; // if false returned end forEach
+                if (false === ret) return self; // if false returned end forEach
             }
         }
     };
-    self.transpose = function() {
-        return ref && is_transposed ? ref /*idempotent*/ : new TensorView(self, {shape: shape.slice().reverse(), stride: stride.slice().reverse(), in_order: ordin.slice(), out_order: ordout.slice()}, {transposed: !is_transposed});
+    self.index = function(/*indices*/) {
+        var indices = is_array(arguments[0], true) ? arguments[0] : arguments;
+        return compute_index(indices, ndim, is_transposed, shape, stride);
     };
-    self.reorder = function(new_in_order, new_out_order) {
-        new_in_order = compute_order(ndim, new_in_order || ordin.slice());
-        new_out_order = compute_order(ndim, new_out_order || ordout.slice());
-        if (new_in_order.length !== ndim || new_out_order.length !== ndim)
+    self.indices = function(index) {
+        index = index || 0;
+        if (0 > index) index += total;
+        if (0 > index || index >= total) throw "TensorView::_indices index ("+index+") is out of bounds (0,"+(total-1)+")!";
+        return compute_indices(index, ndim, is_transposed, shape);
+    };
+    self.get = function(/*indices*/) {
+        var indices = is_array(arguments[0], true) ? arguments[0] : arguments, index = 0;
+        if (indices.length < ndim) throw "TensorView::get indices do not match shape dimension!";
+        index = compute_index(indices, ndim, is_transposed, shape, stride);
+        if (0 > index || index >= total) throw "TensorView::get index ("+index+") is out of bounds (0,"+(total-1)+")!";
+        return get(index, indices);
+    };
+    self.set = function(/*indices, value*/) {
+        var indices = arguments, count = arguments.length-1, index = 0;
+        if (is_array(arguments[0], true)) {indices = arguments[0]; count = indices.length;}
+        if (count < ndim) throw "TensorView::set indices do not match shape dimension!";
+        index = compute_index(indices, ndim, is_transposed, shape, stride);
+        if (0 > index || index >= total) throw "TensorView::set index ("+index+") is out of bounds (0,"+(total-1)+")!";
+        set(index, indices, arguments[arguments.length-1]);
+        return self;
+    };
+    self.setFrom = function(other) {
+        if (is_array(other)) other = new TensorView(other);
+        if ((other instanceof TensorView) && (0 < total) && (0 < other.length))
         {
-            throw "TensorView::reorder order not valid or does not match shape dimension!";
+            var selfiter = self.iterator("setter", 1),
+                otheriter = other.iterator("getter", 1),
+                selfnext, othernext,
+                index, indices, value,
+                items = 0;
+            for (;;)
+            {
+                othernext = otheriter.next();
+                if (!othernext || othernext.done)
+                {
+                    if (items < total)
+                    {
+                        // rewind and continue
+                        otheriter = other.iterator();
+                        othernext = otheriter.next();
+                    }
+                    else
+                    {
+                        // done
+                        break;
+                    }
+                }
+                ++items;
+                selfnext = selfiter.next(othernext.value[0]);
+                if (!selfnext || selfnext.done)
+                {
+                    // done
+                    break;
+                }
+            }
         }
-        return ordin.length === ordin.filter(function(axis, i) {return axis === new_in_order[i];}).length && ordout.length === ordout.filter(function(axis, i) {return axis === new_out_order[i];}).length ? self /*idempotent*/ : new TensorView(!ref && (null != data) ? data : self, {shape: shape.slice(), stride: stride.slice(), in_order: new_in_order, out_order: new_out_order});
+        return self;
+    };
+    self.transpose = function() {
+        return ref && is_transposed ? ref /*idempotent*/ : new TensorView(self, {shape: shape.slice().reverse()}, {transposed: !is_transposed});
+    };
+    self.permute = function(/*permutation*/) {
+        var permutation = is_array(arguments[0], true) ? arguments[0] : [].slice.call(arguments);
+        if (!is_perm(permutation, ndim))
+        {
+            throw "TensorView::permute permutation not valid or does not match shape dimension!";
+        }
+        var ipermutation = invperm(permutation),
+            adjust_indices = function(indices) {
+                return permute(indices, ipermutation);
+            };
+        return permutation.length === permutation.filter(function(pi, i) {return pi === i;}).length ? self /*identity*/ : new TensorView(self, {
+            shape: permute(shape, permutation)
+        }, {
+            get: function(indices) {
+                if (indices.length < ndim) throw "TensorView::get indices do not match shape dimension!";
+                return self.get(adjust_indices(indices));
+            },
+            set: function(indices, value) {
+                if (indices.length < ndim) throw "TensorView::set indices do not match shape dimension!";
+                self.set(adjust_indices(indices), value);
+            }
+        });
     };
     self.reshape = function(new_shape) {
         var new_ndim = new_shape.length;
@@ -337,108 +379,21 @@ function TensorView(data, o, _)
         if (
             ref &&
             (ref.dimension === new_ndim) &&
-            (new_ndim === ref.shape(true).filter(function(dim, axis) {return dim === new_shape[axis];}).length)
+            (new_ndim === ref.shape().filter(function(dim, axis) {return dim === new_shape[axis];}).length)
         )
         {
             return ref; /*idempotent*/
         }
         return new TensorView(!ref && (null != data) ? data : self, {shape: new_shape});
     };
-    self.permute = function(/*permutation*/) {
-        var permutation = is_array(arguments[0], true) ? arguments[0] : [].slice.call(arguments);
-        if (!is_perm(permutation, ndim))
+    self.reorder = function(new_in_order, new_out_order) {
+        new_in_order = compute_order(ndim, new_in_order);
+        new_out_order = compute_order(ndim, new_out_order);
+        if (new_in_order.length !== ndim || new_out_order.length !== ndim)
         {
-            throw "TensorView::permute permutation not valid or does not match shape dimension!";
+            throw "TensorView::reorder order not valid or does not match shape dimension!";
         }
-        var new_shape = permutation.map(function(pi) {return shape[pi];}),
-            ipermutation = invperm(permutation),
-            adjust_indices = function(indices) {
-                return ipermutation.map(function(pi, axis) {
-                    return indices[pi];
-                });
-            };
-        return permutation.length === permutation.filter(function(pi, i) {return pi === i;}).length ? self /*identity*/ : new TensorView(self, {
-            shape: new_shape/*,
-            in_order: ordin.slice(),
-            out_order: ordout.slice()*/
-        }, {
-            get: function(indices) {
-                if (indices.length < ndim) throw "TensorView::get indices do not match shape dimension!";
-                return self.get(adjust_indices(indices));
-            },
-            set: function(indices, value) {
-                if (indices.length < ndim) throw "TensorView::set indices do not match shape dimension!";
-                self.set(adjust_indices(indices), value);
-            }
-        });
-    };
-    self.squeeze = function(start_axis) {
-        start_axis = start_axis || 0;
-        var new_shape = shape.filter(function(dim, axis) {
-                return (axis < start_axis) || (1 !== dim);
-            }),
-            new_ndim,
-            adjust_indices = function(indices) {
-                var i = 0;
-                return shape.map(function(dim, axis) {
-                    return axis < start_axis ? indices[i++] : (1 === dim ? 0 : indices[i++]);
-                });
-            };
-        if (!new_shape.length) new_shape = [1];
-        new_ndim = new_shape.length;
-        return new_ndim === ndim ? self /*idempotent*/ : new TensorView(self, {
-            shape: new_shape,
-            in_order: ordin.reduce(function(order, axis) {
-                if (axis < start_axis)
-                {
-                    order.push(axis);
-                }
-                else if (1 !== shape[axis])
-                {
-                    for (var i=axis-1; i>=0; --i)
-                    {
-                        if (1 === shape[i]) --axis;
-                    }
-                    order.push(axis);
-                }
-                return order;
-            }, []),
-            out_order: ordout.reduce(function(order, axis) {
-                if (axis < start_axis)
-                {
-                    order.push(axis);
-                }
-                else if (1 !== shape[axis])
-                {
-                    for (var i=axis-1; i>=0; --i)
-                    {
-                        if (1 === shape[i]) --axis;
-                    }
-                    order.push(axis);
-                }
-                return order;
-            }, [])
-        }, {
-            index: function(indices) {
-                return self.index(adjust_indices(indices));
-            },
-            indices: function(index) {
-                var indices = self.indices(index).reduce(function(indices, i, axis) {
-                    if ((axis < start_axis) || (1 !== shape[axis])) indices.push(i);
-                    return indices;
-                }, []);
-                if (!indices.length) indices = [0];
-                return indices;
-            },
-            get: function(indices) {
-                if (indices.length < new_ndim) throw "TensorView::get indices do not match shape dimension!";
-                return self.get(adjust_indices(indices));
-            },
-            set: function(indices, value) {
-                if (indices.length < new_ndim) throw "TensorView::set indices do not match shape dimension!";
-                self.set(adjust_indices(indices), value);
-            }
-        });
+        return (new TensorView(self.permute(invperm(new_in_order))).reshape(shape.slice())).permute(invperm(new_out_order)).reshape(shape.slice());
     };
     self.slice = function(/*slices*/) {
         var slices = compute_slices(is_array(arguments[0], true) ? arguments[0] : ([].slice.call(arguments)), shape),
@@ -452,9 +407,7 @@ function TensorView(data, o, _)
             }
         ;
         return shape.length === shape.filter(function(dim, axis) {return dim === new_shape[axis];}).length ? self /*idempotent*/ : new TensorView(self, {
-            shape: new_shape,
-            in_order: ordin.slice(),
-            out_order: ordout.slice()
+            shape: new_shape
         }, {
             get: function(indices) {
                 if (indices.length < ndim) throw "TensorView::get indices do not match shape dimension!";
@@ -529,6 +482,33 @@ function TensorView(data, o, _)
             }
         });
     };
+    self.squeeze = function(start_axis) {
+        start_axis = start_axis || 0;
+        var new_shape = shape.filter(function(dim, axis) {
+                return (axis < start_axis) || (1 !== dim);
+            }),
+            new_ndim,
+            adjust_indices = function(indices) {
+                var i = 0;
+                return shape.map(function(dim, axis) {
+                    return axis < start_axis ? indices[i++] : (1 === dim ? 0 : indices[i++]);
+                });
+            };
+        if (!new_shape.length) new_shape = [1];
+        new_ndim = new_shape.length;
+        return new_ndim === ndim ? self /*idempotent*/ : new TensorView(self, {
+            shape: new_shape
+        }, {
+            get: function(indices) {
+                if (indices.length < new_ndim) throw "TensorView::get indices do not match shape dimension!";
+                return self.get(adjust_indices(indices));
+            },
+            set: function(indices, value) {
+                if (indices.length < new_ndim) throw "TensorView::set indices do not match shape dimension!";
+                self.set(adjust_indices(indices), value);
+            }
+        });
+    };
 }
 TensorView.VERSION = '2.0.0';
 TensorView[proto] = {
@@ -541,19 +521,20 @@ TensorView[proto] = {
     in_order: null,
     out_order: null,
     stride: null,
+    iterator: null,
     index: null,
     indices: null,
     get: null,
     set: null,
-    iterator: null,
+    setFrom: null,
     forEach: null,
     transpose: null,
-    reorder: null,
-    reshape: null,
     permute: null,
-    squeeze: null,
+    reshape: null,
+    reorder: null,
     slice: null,
     concat: null,
+    squeeze: null,
     toArray: function(ArrayClass) {
         var self = this, array = new (ArrayClass || Array)(self.length), index = 0;
         self.forEach(function(item/*, indices*/) {array[index++] = item;});
@@ -561,7 +542,7 @@ TensorView[proto] = {
     },
     toNDArray: function() {
         var self = this,
-            shape = self.shape(true),
+            shape = self.shape(),
             ndim = shape.length,
             ndarray = ndim ? new Array(shape[0]) : [];
         self.forEach(function(item, indices) {
@@ -576,7 +557,7 @@ TensorView[proto] = {
         return ndarray;
     },
     toString: function(maxsize, stringify) {
-        if (!is_function(stringify)) stringify = function(item) {return String(item);};
+        if (!is_function(stringify)) stringify = to_string;
         if (!is_num(maxsize, true)) maxsize = Infinity;
         var self = this, shape = self.shape(), ndim = shape.length, ndarray = self.toNDArray();
         return 2 < ndim ? str_nd(ndarray, shape, maxsize, stringify) : (2 === ndim ? str_2d(ndarray, shape, maxsize, stringify) : str_1d(ndarray, shape, maxsize, stringify));
@@ -590,6 +571,14 @@ if (('undefined' !== typeof Symbol) && ('undefined' !== typeof Symbol.iterator))
 }
 
 // utils
+function std_eq(a, b)
+{
+    return a === b;
+}
+function to_string(x)
+{
+    return String(x);
+}
 function is_function(x)
 {
     return "function" === typeof x;
@@ -630,7 +619,7 @@ function compute_shape(x)
 {
     return is_array(x) ? ([x.length]).concat(compute_shape(x[0])) : [];
 }
-function compute_stride(ndim, shape, ordin, ordout, is_transposed)
+function compute_stride(ndim, shape, is_transposed)
 {
     var axis, stride = new Array(ndim);
     if (is_transposed)
@@ -647,9 +636,13 @@ function compute_stride(ndim, shape, ordin, ordout, is_transposed)
 }
 function compute_order(ndim, order)
 {
-    if ("column-major" === order)
+    if ("column-major-reverse" === order)
     {
-        order = array(ndim, function(axis) {return (axis < 2 ? 1-axis : axis);});
+        order = array(ndim, function(axis) {return ndim-1-(axis < 2 ? 1-axis : axis);});
+    }
+    else if ("column-major" === order)
+    {
+        order = array(ndim, function(axis) {return axis < 2 ? 1-axis : axis;});
     }
     else if ("row-major-reverse" === order)
     {
@@ -661,14 +654,12 @@ function compute_order(ndim, order)
     }
     return order;
 }
-function compute_index(index_getter, indices, ndim, is_transposed, shape, ordin, ordout, stride)
+function compute_index(indices, ndim, is_transposed, shape, stride)
 {
-    // compute single index for arbitrary ordering scheme from multidimensional indices
-    if (index_getter) return index_getter(indices);
-    var index = 0, ax, axis, i;
-    for (ax=0; ax<ndim; ++ax)
+    // compute single index from multidimensional indices
+    var index = 0, axis, i;
+    for (axis=0; axis<ndim; ++axis)
     {
-        axis = ax;//ordin[ax];
         i = indices[axis];
         if (0 > i) i += shape[axis];
         if (0 > i || i >= shape[axis]) throw "TensorView index ("+indices[axis]+") for dimension ("+axis+") is out of bounds (0,"+(shape[axis]-1)+")!";
@@ -676,12 +667,11 @@ function compute_index(index_getter, indices, ndim, is_transposed, shape, ordin,
     }
     return index;
 }
-function compute_indices(indices_getter, index, ndim, is_transposed, shape, ordin, ordout, indices)
+function compute_indices(index, ndim, is_transposed, shape, indices)
 {
-    // compute multidimensional indices for arbitrary ordering scheme from single index
-    if (indices_getter) return indices_getter(index);
+    // compute multidimensional indices from single index
     indices = indices || new Array(ndim);
-    var ax, axis, i;
+    var axis, i;
     if (is_transposed)
     {
         for (axis=0; axis<ndim; ++axis)
@@ -807,6 +797,29 @@ function invperm(p)
     for (i=0; i<n; ++i) ip[p[i]] = i;
     return ip;
 }
+function compose(/*perms*/)
+{
+    for (var res=arguments[0],i=1,n=arguments.length; i<n; ++i)
+    {
+        res = permute(res, arguments[i]);
+    }
+    return res;
+}
+function permute(arr, perm)
+{
+    return perm ? array(arr.length, function(i) {
+        return arr[perm[i]];
+    }) : arr;
+}
+function project(x, i, j)
+{
+    j = j || 0;
+    if (is_array(x, true))
+    {
+        return ':' === i[j] ? x.map(function(xj) {return project(xj, i, j+1);}) : project(x[i[j]], i, j+1);
+    }
+    return x;
+}
 function pad(s, n, z, after)
 {
     var p = s.length < n ? (new Array(n-s.length+1)).join(z) : '';
@@ -831,15 +844,6 @@ function sum(array)
 function product(array)
 {
     return array.reduce(mul, 1);
-}
-function project(x, i, j)
-{
-    j = j || 0;
-    if (is_array(x, true))
-    {
-        return ':' === i[j] ? x.map(function(xj) {return project(xj, i, j+1);}) : project(x[i[j]], i, j+1);
-    }
-    return x;
 }
 function str_1d(x, shape, MAXPRINTSIZE, stringify)
 {
