@@ -265,10 +265,10 @@ function TensorView(data, o, _)
             }
         }};
     };
-    self.forEach = function(f) {
+    self.forEach = function(f, dir) {
         if ((0 < total) && is_function(f))
         {
-            var iter = self.iterator(), next, ret = null;
+            var iter = self.iterator("getter", dir), next, ret = null;
             for (;;)
             {
                 next = iter.next();
@@ -393,7 +393,7 @@ function TensorView(data, o, _)
         {
             throw "TensorView::reorder order not valid or does not match shape dimension!";
         }
-        return (new TensorView(self.permute(invperm(new_in_order))).reshape(shape.slice())).permute(invperm(new_out_order)).reshape(shape.slice());
+        return new TensorView((new TensorView(self.permute(new_in_order), {shape: permute(shape, invperm(new_out_order))})).permute(new_out_order), {shape: shape.slice()});
     };
     self.slice = function(/*slices*/) {
         var slices = compute_slices(is_array(arguments[0], true) ? arguments[0] : ([].slice.call(arguments)), shape),
@@ -518,8 +518,6 @@ TensorView[proto] = {
     dimension: null,
     length: null,
     shape: null,
-    in_order: null,
-    out_order: null,
     stride: null,
     iterator: null,
     index: null,

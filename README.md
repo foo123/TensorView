@@ -4,7 +4,7 @@ View one-dimensional array data, typed array data and/or multi-dimensional array
 
 ![TensorView](/tensorview.jpg)
 
-version: **2.0.0** (12 kB minified)
+version: **2.0.0** (11 kB minified)
 
 `TensorView` is both memory-efficient and speed-efficient since it only creates ways to view array data as multidimensional tensors **without** actually creating new arrays. One can nevertheless explicitly store a TensorView instance as a single-dimensional or multi-dimensional array using `view.toArray()` or `view.toNDArray()` methods.
 
@@ -100,11 +100,9 @@ true true
 
 ```javascript
 // data=single value or single-dimensional array or typed array or multi-dimensional array
-// options={shape?:Array, stride?:Array, in_order?:Array, out_order?:Array}
-// shape array defines desired shape of view
+// options={shape?:Array, stride?:Array}
+// shape array defines desired shape of view (optional)
 // stride array defines strides for each dimension of view (optional)
-// in_order array defines order of dimension traversal when reading from data (optional)
-// out_order array defines order of dimension traversal when writing to data (optional)
 const view  = TensorView(data, options);
 
 // underlying data of view
@@ -141,11 +139,11 @@ const transposed = view.transpose();
 // view with different shape
 const reshaped = view.reshape(new_shape);
 
-// view with different in/out order
-const reordered = view.reorder(new_in_order, new_out_order);
-
 // view with permuted dimensions
 const permuted = view.permute(permutation);
+
+// view with different in/out order
+const reordered = view.reorder(new_in_order, new_out_order);
 
 // sliced view with whole axis,
 // or only a and b indices,
@@ -167,8 +165,12 @@ const value = view.get(indices);
 view.set(indices, value);
 // NOTE: underlying data will change in all views which use this data and all views which depend on views which use this data
 
-// forEach method
-view.forEach(function(item, index, data, view) {/*..*/});
+// set whole view from another array or view
+view.setFrom(other);
+// NOTE: underlying data will change in all views which use this data and all views which depend on views which use this data
+
+// forEach method (forward or reverse direction based on `dir` 1 or -1)
+view.forEach(function(item, index, data, view) {/*..*/}, dir=1);
 
 // similar as iterator protocol
 for (let [item, index] of view) {/*..*/}
