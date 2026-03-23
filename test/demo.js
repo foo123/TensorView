@@ -29,11 +29,12 @@ echo();
 // same as
 sT.forEach((item, index) => echo([item, index.slice()])); // index is array of multidimensional indices
 
-// slices and nested slices
+// slices, nested slices and selections
 const s1 = TensorView(array, {shape:[2,5]});
 const s2 = s1.slice(':','2:4');
 const s3 = s2.slice('1', '-1:-1:0').squeeze();
 const s4 = s2.slice('1', '-1,0').squeeze();
+const s5 = s1.select([[0,0,1,0,0], [0,1,0,1,0]]);
 
 echo('---');
 
@@ -43,6 +44,13 @@ echo(s2.toNDArray());
 echo(s3.toNDArray());
 echo(s4.toNDArray());
 echo(s1.data === s2.data, s1.data === s3.data, s1.data === s4.data); // uses same data
+
+echo('---');
+
+echo('selections');
+echo(s1.toArray());
+echo(s5.toArray());
+echo(s1.data === s5.data); // uses same data
 
 s2.set([1,1],34);
 echo('---');
@@ -55,6 +63,7 @@ echo(s4.toNDArray());
 echo(s1.data === s2.data, s1.data === s3.data, s1.data === s4.data); // uses same data
 
 s2.setFrom([11,12,13,14,15,16])
+s5.setFrom(345);
 echo('---');
 
 echo('block set');
@@ -62,7 +71,8 @@ echo(s1.toNDArray());
 echo(s2.toNDArray());
 echo(s3.toNDArray());
 echo(s4.toNDArray());
-echo(s1.data === s2.data, s1.data === s3.data, s1.data === s4.data); // uses same data
+echo(s5.select(false).toNDArray());
+echo(s1.data === s2.data, s1.data === s3.data, s1.data === s4.data, s1.data === s5.data); // uses same data
 
 // concatenations
 const c1 = TensorView(array, {shape:[2,5]});
@@ -124,8 +134,12 @@ echo('c', {i:[0,1], idx:c.index([0,1]), v:c.get([0,1])});
 const A1 = TensorView([["a11", "a12", "a13", "a14", "a15"], ["a21", "a22", "a23", "a24", "a25"], ["a31", "a32", "a33", "a34", "a35"]]);
 const A2 = TensorView([["b11", "b12", "b13", "b14", "b15"], ["b21", "b22", "b23", "b24", "b25"], ["b31", "b32", "b33", "b34", "b35"]]);
 const AA = A1.concat(A2, "newaxis");
+const AA2 = AA.map(function(x) {return x+"_2";});
+const AAA = AA.concat(AA2, "newaxis")
 const AAO = AA.reorder("row-major", "column-major");
 const AAT = AA.transpose();
+const AAAO = AAA.reorder("row-major", "column-major");
+const AAAT = AAA.transpose();
 echo('---');
 
 echo('concat/permute/reshape/reorder');
@@ -146,3 +160,29 @@ echo('---');
 echo(AA.permute(2,0,1).reshape([6,5]).toString());
 echo('---');
 echo(AA.permute(2,1,0).reshape([6,5]).reorder([0,1],[1,0]).toString());
+echo('---');
+echo(AAA.reshape([12,5]).toString());
+echo('---');
+echo(AAA.permute(1,0,2,3).reshape([12,5]).toString());
+echo('---');
+echo(AAA.permute(3,2,0,1).reshape([12,5]).toString());
+echo('---');
+echo(AAA.permute(2,3,1,0).reshape([12,5]).reorder([0,1],[1,0]).toString());
+
+const a1 = [[11, 12, 13, 14],[21, 22, 23, 24],[31, 32, 33, 34]];
+const b1 = [[110, 120, 130, 140],[210, 220, 230, 240],[310, 320, 330, 340]];
+
+const t1 = TensorView(a1).concat(TensorView(b1), "newaxis");
+echo('---');
+echo(t1.toString());
+echo('---');
+echo(t1.toArray().join("\n"));
+echo('---');
+echo(t1.permute(2,1,0).toArray().join("\n"));
+
+echo('---');
+const A11 = TensorView([["a11", "a12", "a13", "a14", "a15"], ["a21", "a22", "a23", "a24", "a25"], ["a31", "a32", "a33", "a34", "a35"]]);
+const A21 = TensorView([["b11", "b12", "b13", "b14", "b15"], ["b21", "b22", "b23", "b24", "b25"], ["b31", "b32", "b33", "b34", "b35"]]);
+const AA11 = A11.concat(A21, "newaxis");
+const AA22 = TensorView(AA11.permute(2,1,0).toArray(), {shape:[5,6]}).permute(1,0);
+echo(AA22.toString());
