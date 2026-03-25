@@ -129,6 +129,7 @@ function TensorView(data, o, _)
     else
     {
         is_value = null != data;
+        if (is_value && (!shape || !shape.length)) shape = [1];
         computed_total = total = product(shape);
     }
 
@@ -142,7 +143,7 @@ function TensorView(data, o, _)
 
     if (nd_shape)
     {
-        same_shape = (nd_shape.length === shape.length) && (nd_shape.length === shape.filter(function(dim, axis) {return dim === nd_shape[axis];}).length);
+        same_shape = (nd_shape === shape) || ((nd_shape.length === shape.length) && (nd_shape.length === shape.filter(function(dim, axis) {return dim === nd_shape[axis];}).length));
         if (!same_shape) aux_indices = new Array(nd_shape.length);
     }
 
@@ -367,16 +368,32 @@ function TensorView(data, o, _)
             var selfiter = self.iterator("setter", 1),
                 otheriter = other.iterator("getter", 1),
                 selfnext, othernext,
-                index, indices, value;
+                index, indices, value,
+                items = 0;
             for (;;)
             {
                 othernext = otheriter.next();
                 if (!othernext || othernext.done)
                 {
-                    // rewind and continue
-                    otheriter = other.iterator();
-                    othernext = otheriter.next();
+                    if (0 === items)
+                    {
+                        // empty
+                        break;
+                    }
+                    else if (items < total)
+                    {
+                        // rewind and continue
+                        otheriter = other.iterator();
+                        othernext = otheriter.next();
+                        //if (!othernext || othernext.done) break;
+                    }
+                    else
+                    {
+                        // done
+                        break;
+                    }
                 }
+                ++items;
                 selfnext = selfiter.next(othernext.value[0]);
                 if (!selfnext || selfnext.done)
                 {
@@ -400,6 +417,9 @@ function TensorView(data, o, _)
         return permutation.length === permutation.filter(function(pi, i) {return pi === i;}).length ? self /*identity*/ : new TensorView(self, {
             shape: permute(shape, permutation)
         }, {
+            select: selector ? function(indices) {
+                return selector(permute(indices, ipermutation));
+            } : null,
             get: function(indices) {
                 if (indices.length < ndim) throw "TensorView::get indices do not match shape dimension!";
                 return self.get(permute(indices, ipermutation));
@@ -439,7 +459,7 @@ function TensorView(data, o, _)
         return new TensorView((new TensorView(self.permute(new_in_order), {shape: permute(shape, invperm(new_out_order))})).permute(new_out_order), {shape: shape.slice()});
     };
     self.slice = function(/*slices*/) {
-        var slices = compute_slices(is_array(arguments[0], true) ? arguments[0] : ([].slice.call(arguments)), shape),
+        var slices = compute_slices((1 === arguments.length) && is_array(arguments[0], true) && (arguments[0].length === shape.length) ? arguments[0] : ([].slice.call(arguments)), shape),
             new_shape = slices.map(function(slice, axis) {
                 return compute_slice_length(shape[axis], slice);
             }),
@@ -449,9 +469,12 @@ function TensorView(data, o, _)
                 });
             }
         ;
-        return shape.length === shape.filter(function(dim, axis) {return dim === new_shape[axis];}).length ? self /*idempotent*/ : new TensorView(self, {
+        return new TensorView(self, {
             shape: new_shape
         }, {
+            select: selector ? function(indices) {
+                return selector(adjust_indices(indices));
+            } : null,
             get: function(indices) {
                 if (indices.length < ndim) throw "TensorView::get indices do not match shape dimension!";
                 return self.get(adjust_indices(indices));
@@ -469,7 +492,7 @@ function TensorView(data, o, _)
         }
         else
         {
-            return !is_function(selection) && !is_array(selection) ? self : new TensorView(self, {
+            return !is_function(selection) && !is_array(selection) ? self : new TensorView(selector ? ref : self, {
                 shape: shape.slice()
             }, {
                 select: is_function(selection) ? function(indices) {
@@ -621,17 +644,19 @@ TensorView[proto] = {
         });
         return ndarray;
     },
-    toString: function(maxsize, stringify) {
+    toString: function(maxsize, stringify, i0) {
+        i0 = i0 || 0;
         if (!is_function(stringify)) stringify = to_string;
         if (!is_num(maxsize, true)) maxsize = Infinity;
         var self = this, shape = self.shape(), ndim = shape.length, ndarray = self.toNDArray();
-        return 2 < ndim ? str_nd(ndarray, shape, maxsize, stringify) : (2 === ndim ? str_2d(ndarray, shape, maxsize, stringify) : str_1d(ndarray, shape, maxsize, stringify));
+        return 2 < ndim ? str_nd(ndarray, shape, maxsize, stringify, i0) : (2 === ndim ? str_2d(ndarray, shape, maxsize, stringify) : str_1d(ndarray, shape, maxsize, stringify));
     },
-    toTex: function(maxsize, texify) {
+    toTex: function(maxsize, texify, i0) {
+        i0 = i0 || 0;
         if (!is_function(texify)) texify = to_string;
         if (!is_num(maxsize, true)) maxsize = Infinity;
         var self = this, shape = self.shape(), ndim = shape.length, ndarray = self.toNDArray();
-        return 2 < ndim ? tex_nd(ndarray, shape, maxsize, texify) : (2 === ndim ? tex_2d(ndarray, shape, maxsize, texify) : tex_1d(ndarray, shape, maxsize, texify));
+        return 2 < ndim ? '\\displaylines{'+tex_nd(ndarray, shape, maxsize, texify, i0)+'}' : (2 === ndim ? tex_2d(ndarray, shape, maxsize, texify) : tex_1d(ndarray, shape, maxsize, texify));
     }
 };
 if (('undefined' !== typeof Symbol) && ('undefined' !== typeof Symbol.iterator))
@@ -949,14 +974,14 @@ function str_2d(x, shape, MAXPRINTSIZE, stringify)
         }).join('  ') + ']';
     }).join('\n');
 }
-function str_nd(x, shape, MAXPRINTSIZE, stringify, indices)
+function str_nd(x, shape, MAXPRINTSIZE, stringify, i0, indices)
 {
     if (null == indices) indices = [];
     var str = '', ind, i, n, lim;
     if (shape.length === 2 + indices.length)
     {
         ind = [':', ':'].concat(indices);
-        str += 'array(' + ind.map(String).join(',') + ') ->' + "\n" + str_2d(project(x, ind), shape, MAXPRINTSIZE, stringify);
+        str += 'array(' + ind.map(function(i) {return is_string(i) ? i : String(i + i0);}).join(',') + ')' + "\n" + str_2d(project(x, ind), shape, MAXPRINTSIZE, stringify);
     }
     else
     {
@@ -965,7 +990,7 @@ function str_nd(x, shape, MAXPRINTSIZE, stringify, indices)
         for (i=0; i<lim; ++i)
         {
             if (str.length) str += "\n";
-            str += str_nd(x, shape, MAXPRINTSIZE, stringify, indices.concat(i));
+            str += str_nd(x, shape, MAXPRINTSIZE, stringify, i0, indices.concat(i));
         }
         if (lim < n)
         {
@@ -973,7 +998,7 @@ function str_nd(x, shape, MAXPRINTSIZE, stringify, indices)
             for (i=n-lim; i<n; ++i)
             {
                 if (str.length) str += "\n";
-                str += str_nd(x, shape, MAXPRINTSIZE, stringify, indices.concat(i));
+                str += str_nd(x, shape, MAXPRINTSIZE, stringify, i0, indices.concat(i));
             }
         }
     }
@@ -1003,14 +1028,14 @@ function tex_2d(x, shape, MAXPRINTSIZE, texify)
     }
     return '\\begin{bmatrix}'+ x.map(function(xi) {return xi.map(texify).join(' & \\hskip 1em ');}).join(' \\\\ ') + '\\end{bmatrix}';
 }
-function tex_nd(x, shape, MAXPRINTSIZE, texify, indices)
+function tex_nd(x, shape, MAXPRINTSIZE, texify, i0, indices)
 {
     if (null == indices) indices = [];
     var tex = '', ind, i, n, lim;
     if (shape.length === 2 + indices.length)
     {
         ind = [':', ':'].concat(indices);
-        tex += '\\text{array(' + ind.map(String).join(',') + ')}' + " \\\\ " + tex_2d(project(x, ind), shape, MAXPRINTSIZE, texify);
+        tex += '\\text{array}(' + ind.map(function(i) {return is_string(i) ? i : String(i + i0);}).join(',') + ')' + " \\\\ " + tex_2d(project(x, ind), shape, MAXPRINTSIZE, texify);
     }
     else
     {
@@ -1018,16 +1043,16 @@ function tex_nd(x, shape, MAXPRINTSIZE, texify, indices)
         lim = stdMath.min(n, stdMath.round(MAXPRINTSIZE/2));
         for (i=0; i<lim; ++i)
         {
-            if (tex.length) tex += " \\\\ ";
-            tex += tex_nd(x, shape, MAXPRINTSIZE, texify, indices.concat(i));
+            if (tex.length) tex += "\\\\";
+            tex += tex_nd(x, shape, MAXPRINTSIZE, texify, i0, indices.concat(i));
         }
         if (lim < n)
         {
             if (tex.length) tex += "\\\\ \\vdots";
             for (i=n-lim; i<n; ++i)
             {
-                if (tex.length) tex += " \\\\ ";
-                tex += tex_nd(x, shape, MAXPRINTSIZE, texify, indices.concat(i));
+                if (tex.length) tex += "\\\\";
+                tex += tex_nd(x, shape, MAXPRINTSIZE, texify, i0, indices.concat(i));
             }
         }
     }

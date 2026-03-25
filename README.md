@@ -4,7 +4,7 @@ View one-dimensional array data, typed array data and/or multi-dimensional array
 
 ![TensorView](/tensorview.jpg)
 
-version: **2.1.0 in progress** (11 kB minified)
+version: **2.1.0** (13 kB minified)
 
 `TensorView` is both memory-efficient and speed-efficient since it only creates ways to view array data as multidimensional tensors **without** actually creating new arrays. One can nevertheless explicitly store a TensorView instance as a single-dimensional or multi-dimensional array using `view.toArray()` or `view.toNDArray()` methods.
 
@@ -174,6 +174,14 @@ view.forEach(function(item, index, data, view) {/*..*/}, dir=1);
 
 // similar as iterator protocol
 for (let [item, index] of view) {/*..*/}
+
+// map method (forward or reverse direction based on `dir` 1 or -1)
+// returns view of same shape
+otherview = view.map(function(item, index, data, view) {/*..*/}, dir=1);
+
+// filter method (forward or reverse direction based on `dir` 1 or -1)
+// returns single dimensional view
+otherview = view.filter(function(item, index, data, view) {/*..*/}, dir=1);
 
 // creating an actual copy and not share data is easy to do in various ways, eg:
 const viewcopy = TensorView(view.toArray(), {shape: view.shape()});
