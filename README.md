@@ -8,6 +8,8 @@ version: **2.1.0** (13 kB minified)
 
 `TensorView` is both memory-efficient and speed-efficient since it only creates ways to view array data as multidimensional tensors **without** actually creating new arrays. One can nevertheless explicitly store a TensorView instance as a single-dimensional or multi-dimensional array using `view.toArray()` or `view.toNDArray()` methods.
 
+[TensorView with SciLite](https://foo123.github.io/examples/scilite/)
+
 **Example** (see `/test/demo.js`)
 
 ```javascript
