@@ -3,6 +3,9 @@
 const TensorView = require('../src/TensorView.js');
 const echo = console.log;
 
+const A = TensorView([[1, 2, 3], [4, 5, 6]]).concat(TensorView([[7, 8, 9], [10, 11, 12]]), "newaxis");
+const B = A.permute(2,1,0).reshape([6, 2]).permute(1,0);
+echo(B.toString());
 const t = TensorView([1,2,3,4,5,6], {shape:[2,3]}).slice(':','1:2');
 const T = t.transpose();
 const r = TensorView([[1,2,3],[4,5,6]], {shape:[3,2]});
